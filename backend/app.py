@@ -20,7 +20,7 @@ app = FastAPI(title="Resume Transformer API", version="1.0.0")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://your-frontend.onrender.com"],  # Update with your frontend URL
+    allow_origins=["http://localhost:3000", "https://https://resume-smith-front.onrender.com/"],  # Update with your frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
