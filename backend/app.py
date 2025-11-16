@@ -17,6 +17,16 @@ import asyncio
 
 app = FastAPI(title="Resume Transformer API", version="1.0.0")
 
+
+# CORS middleware - ALLOW EVERYTHING (for testing)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+'''
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -26,6 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"]
 )
+'''
 
 @app.get("/")
 async def root():
