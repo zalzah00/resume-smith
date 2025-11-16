@@ -17,26 +17,16 @@ import asyncio
 
 app = FastAPI(title="Resume Transformer API", version="1.0.0")
 
-'''
-# CORS middleware - ALLOW EVERYTHING (for testing)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-'''
-# CORS middleware - SECURE BUT STILL WORKS LOCALLY
+# CORS middleware - MAXIMUM SECURITY
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000", 
-        "https://resume-smith-front.onrender.com"  # ← REMOVED trailing slash
+        "https://resume-smith-front.onrender.com"
     ],
-    allow_credentials=False,  # ← CHANGED: No credentials needed
-    allow_methods=["GET", "POST", "OPTIONS"],  # ← CHANGED: Only what we use
-    allow_headers=["Content-Type", "Authorization"],  # ← CHANGED: Only needed headers
+    allow_credentials=False,
+    allow_methods=["POST"],  # ← REMOVED GET & OPTIONS (we only need POST)
+    allow_headers=["Content-Type"],  # ← REMOVED Authorization (not needed)
 )
 
 
