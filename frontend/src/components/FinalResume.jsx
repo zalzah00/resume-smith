@@ -77,7 +77,7 @@ const FinalResume = ({ finalResume, loading }) => {
         backgroundColor: 'white', 
         padding: '30px',
         border: '1px solid #d0d0d0',
-        fontFamily: 'Calibri, Arial, sans-serif',
+        fontFamily: 'Arial, sans-serif',
         fontSize: '13px',
         lineHeight: '1.4',
         minHeight: '500px',
