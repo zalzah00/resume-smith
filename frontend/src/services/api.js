@@ -2,9 +2,7 @@
 
 import axios from 'axios';
 
-const API_BASE = process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:8000' 
-  : 'https://your-backend-service.onrender.com';
+const API_BASE = 'https://resume-smith-api.onrender.com';
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -45,5 +43,3 @@ export const healthCheck = async () => {
   const response = await api.get('/health');
   return response.data;
 };
-
-// end_of_file
