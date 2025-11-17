@@ -50,136 +50,114 @@ try:
     GEMINI_API_KEY = os.environ.get(GEMINI_API_NAME)
     if GEMINI_API_KEY:
         gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-        API_STATUS.append(f"✅ Gemini Client ({GEMINI_MODEL}) ready.")
+        API_STATUS.append("Gemini client initialized.")
     else:
-        API_STATUS.append("⚠️ Gemini Client: Key missing in .env.")
+        API_STATUS.append(f"Gemini client not initialized: {GEMINI_API_NAME} not set.")
 except Exception as e:
-    API_STATUS.append(f"❌ Gemini Client Error: {e}")
+    API_STATUS.append(f"Gemini client initialization error: {e}")
+    logger.error(f"Gemini client initialization error: {e}")
 
 # Initialize Groq Client
 try:
     GROQ_API_KEY = os.environ.get(GROQ_API_NAME)
     if GROQ_API_KEY:
         groq_client = Groq(api_key=GROQ_API_KEY)
-        API_STATUS.append(f"✅ Groq Client ({GROQ_MODEL}) ready.")
+        API_STATUS.append("Groq client initialized.")
     else:
-        API_STATUS.append("⚠️ Groq Client: Key missing in .env.")
+        API_STATUS.append(f"Groq client not initialized: {GROQ_API_NAME} not set.")
 except Exception as e:
-    API_STATUS.append(f"❌ Groq Client Error: {e}")
+    API_STATUS.append(f"Groq client initialization error: {e}")
+    logger.error(f"Groq client initialization error: {e}")
 
-CLIENT_AVAILABLE = gemini_client is not None or groq_client is not None
-FINAL_API_STATUS = "\n".join(API_STATUS)
+# Check client availability
+CLIENT_AVAILABLE = {
+    'Gemini': bool(gemini_client),
+    'Groq': bool(groq_client)
+}
 
-if not CLIENT_AVAILABLE:
-    logger.error("No LLM clients were successfully initialized. Please check your API keys.")
+FINAL_API_STATUS = {
+    "status": "Ready",
+    "clients": CLIENT_AVAILABLE,
+    "details": API_STATUS
+}
+logger.info(f"API Client Status: {FINAL_API_STATUS}")
 
-# --- SYSTEM INSTRUCTIONS ---
-SYSTEM_INSTRUCTION = """
-You are an expert resume transformer following an extremely strict, two-phase, human-in-the-loop process. You MUST adhere to all rules exactly.
+# --- System Instructions (MODIFIED) ---
 
---- GLOBAL MANDATORY RULES (Apply to ALL Parts) ---
+PRIMARY_SYSTEM_INSTRUCTION = (
+    "You are an expert career coach and resume transformer. Your goal is to rewrite a user's existing "
+    "resume to better match a specific job description (JD) and incorporate user-provided answers about their experience."
+    "For Part 1, you must analyze and ask clarification questions. For Part 2, you must generate the transformed resume content."
+)
 
-1. No Hallucination
-Do NOT invent, assume, imply, or infer any information that the user has not explicitly provided.
+# 🆕 NEW INSTRUCTION FOR FORMATTING (Part 3)
+FORMATTING_SYSTEM_INSTRUCTION = (
+    "You are a professional Markdown formatting engine. Your only task is to take the provided raw text "
+    "and convert it into a strictly formatted Markdown resume. Ensure the output uses:\n"
+    "1. Headings (`#`, `##`) for all major sections (Experience, Education, etc.).\n"
+    "2. Bullet points (`-` or `*`) for all job descriptions, achievements, and list items.\n"
+    "3. Bold text (`**text**`) for emphasis where appropriate, such as job titles or companies.\n"
+    "4. Maintain a clean, professional, and readable structure. "
+    "DO NOT ADD, REMOVE, OR CHANGE THE SUBSTANTIVE CONTENT; you must ONLY reformat the text."
+)
 
-2. Structure and Style Preservation
-You must preserve: All major resume sections, All internal sub-headings, All job entries, The order of segments (top to bottom), AND The Job Entry Introductory Paragraphs (if they existed originally).
-You may NOT: Merge sections, remove any bullet, or omit a Job Entry Introductory Paragraph.
-Do NOT insert any notes or commentary justifying the omission of content for brevity; all required content must be present.
+# --- Utility Functions (Unchanged) ---
 
-3. JD Keyword Alignment
-Use JD vocabulary only when a factual anchor exists in the resume/user input AND the JD term can be semantically aligned without implying new capabilities.
-
-4. Reordering Restrictions
-You may reorder bullets ONLY within the same sub-heading.
-
-5. Synthesis Guardrail
-Synthesize only by combining facts already present. No extrapolation.
-
---- PHASE 2 — PART 1 (MATCH/GAP ANALYSIS) RULES ---
-
-- Task: Identify Strengths, Gaps, and 3-6 Clarification Questions.
-- Output Format MUST be EXACTLY:
-
-1. Strengths (Supported by Resume Text Only)
-Bullet point
-Bullet point
-etc.
-
-2. Gaps (Missing or Unstated Compared to JD)
-Bullet point
-Bullet point
-etc.
-
-3. Clarification Questions for the User
-Ask 3–6 targeted questions designed ONLY to uncover additional factual content.
-
---- PHASE 2 — PART 2 (RESUME TRANSFORMATION) RULES ---
-
-- Task: Execute the full resume rewrite using the Original Resume, JD, and User's Answers.
-- Rules: Follow the V4 pipeline: JD keyword extraction, Targeted narrative rewriting, Skills reordering, Job entry introductory paragraph rewriting (retain structure and style), Sub-heading rephrasing, and Bullet rewrites.
-- Output Format MUST be EXACTLY:
-
-Part 2: Updated Resume (Final Draft)
-(Provide the fully transformed resume here, with original structure and style preserved, rewritten according to all rules.)
-The final output must consist ONLY of the text of the transformed resume. Do not include any commentary, notes, or justifications for editing.
-"""
-
-# --- Utility Functions ---
-def docx_to_text(docx_file_path, doc_type):
-    """Extracts text content from a .docx file using docx2txt."""
-    if docx_file_path is None:
-        return ""
+def docx_to_text(file_path):
+    """Converts a docx file to plain text."""
     try:
-        text = docx2txt.process(docx_file_path)
-        text = '\n'.join([line.strip() for line in text.splitlines() if line.strip()])
-
-        logger.info(f"--- Extracted {doc_type} Text (First 500 chars) ---\n{text[:500]}...")
-        logger.debug(f"--- Full Extracted {doc_type} Text ---\n{text}")
-        return text
+        return docx2txt.process(file_path)
     except Exception as e:
-        error_msg = f"ERROR: Could not read DOCX file ({doc_type}). Details: {e}"
-        logger.error(error_msg)
-        return error_msg
+        logger.error(f"Error converting DOCX to text: {e}")
+        return f"ERROR: Could not convert file to text. {e}"
 
-# --- Core LLM Functions ---
-def _generate_content_with_config(provider, model_name, prompt):
-    """Internal function to call the LLM with system instruction config based on provider."""
-    
-    if provider == 'Gemini' and gemini_client:
-        config = types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION)
-        response = gemini_client.models.generate_content(
+
+def _generate_content_with_config(provider, model_name, prompt, system_instruction=PRIMARY_SYSTEM_INSTRUCTION):
+    """Internal function to handle the actual LLM API call."""
+    if provider == 'Gemini':
+        client = gemini_client
+        if not client:
+            return "ERROR: Gemini client not initialized."
+            
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction, 
+        )
+        response = client.models.generate_content(
             model=model_name,
             contents=prompt,
-            config=config
+            config=config,
         )
-        return response.text
-    
-    elif provider == 'Groq' and groq_client:
-        messages = [
-            {"role": "system", "content": SYSTEM_INSTRUCTION},
-            {"role": "user", "content": prompt}
-        ]
-        chat_completion = groq_client.chat.completions.create(
-            messages=messages,
+        return response.text.strip()
+
+    elif provider == 'Groq':
+        client = groq_client
+        if not client:
+            return "ERROR: Groq client not initialized."
+            
+        response = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt}
+            ],
             model=model_name,
         )
-        return chat_completion.choices[0].message.content
-        
-    else:
-        raise ValueError(f"Provider '{provider}' not available or client not initialized.")
+        return response.choices[0].message.content.strip()
+
+    return "ERROR: Invalid provider specified."
+
+# --- Core LLM Functions (Modified Part 2 docstring) ---
 
 def run_part_1_analysis(provider, resume_text, jd_text):
-    """Calls the LLM to execute Phase 2 - Part 1 analysis."""
+    """Calls the LLM to execute Phase 1 - Analysis and Questions."""
     if (provider == 'Gemini' and not gemini_client) or (provider == 'Groq' and not groq_client):
         return f"ERROR: Selected {provider} client is not initialized. Check API keys."
-
-    model_name = GEMINI_MODEL if provider == 'Gemini' else GROQ_MODEL
     
-    prompt = f"""
-    --- EXECUTE PHASE 2 — PART 1 ---
-    Generate the Match/Gap Analysis and Clarification Questions ONLY.
+    model_name = GEMINI_MODEL if provider == 'Gemini' else GROQ_MODEL
 
+    prompt = f"""
+    --- EXECUTE PHASE 1 ---
+    Perform the analysis and ask 5-10 targeted clarification questions.
+    
     [JOB DESCRIPTION START]
     {jd_text}
     [JOB DESCRIPTION END]
@@ -187,6 +165,8 @@ def run_part_1_analysis(provider, resume_text, jd_text):
     [ORIGINAL RESUME START]
     {resume_text}
     [ORIGINAL RESUME END]
+    
+    Format your output strictly into two sections: 'Analysis' and 'Clarification Questions'.
     """
     
     logger.info(f"--- FULL PROMPT SENT TO {provider} ({model_name}) (PART 1) ---")
@@ -202,15 +182,19 @@ def run_part_1_analysis(provider, resume_text, jd_text):
         return error_msg
 
 def run_part_2_transformation(provider, resume_text, jd_text, part_1_analysis, user_answers):
-    """Calls the LLM to execute Phase 2 - Part 2 transformation."""
+    """
+    Calls the LLM to execute Phase 2 - Part 2 transformation (Generates the RAW DRAFT).
+    Final formatting will be handled by run_part_3_formatting.
+    """
     if (provider == 'Gemini' and not gemini_client) or (provider == 'Groq' and not groq_client):
         return f"ERROR: Selected {provider} client is not initialized. Check API keys."
     
     model_name = GEMINI_MODEL if provider == 'Gemini' else GROQ_MODEL
 
     prompt = f"""
-    --- EXECUTE PHASE 2 — PART 2 ---
-    Perform the full resume transformation and output the final draft ONLY.
+    --- EXECUTE PHASE 2 — PART 2 (CONTENT DRAFTING) ---
+    Perform the full resume transformation and output the final draft content ONLY.
+    The content should be accurate and complete, but perfect Markdown formatting is NOT required here.
 
     [JOB DESCRIPTION START]
     {jd_text}
@@ -241,4 +225,32 @@ def run_part_2_transformation(provider, resume_text, jd_text, part_1_analysis, u
         logger.error(error_msg)
         return error_msg
 
-# end_of_file
+# 🆕 NEW PART 3 FUNCTION (Formatting)
+def run_part_3_formatting(raw_resume_text, provider='Groq', model_name='llama-3.3-70b-versatile'):
+    """
+    Calls a specialized LLM to strictly format the raw text into clean Markdown.
+    Defaults to Groq for speed/consistency if available.
+    """
+    
+    if (provider == 'Gemini' and not gemini_client) or (provider == 'Groq' and not groq_client):
+        return f"ERROR: Selected {provider} client is not initialized for formatting. Check API keys."
+        
+    logger.info(f"Starting Part 3 formatting with {provider}...")
+    
+    # The raw text from Part 2 becomes the user prompt for the formatting model
+    prompt = raw_resume_text
+    
+    try:
+        # Uses the new FORMATTING_SYSTEM_INSTRUCTION
+        formatted_text = _generate_content_with_config(
+            provider=provider,
+            model_name=model_name,
+            system_instruction=FORMATTING_SYSTEM_INSTRUCTION, 
+            prompt=prompt 
+        ) 
+        logger.info("Part 3 formatting successful.")
+        return formatted_text
+    except Exception as e:
+        error_msg = f"LLM ERROR during Part 3 Formatting ({provider}): {e}"
+        logger.error(error_msg, exc_info=True)
+        return error_msg

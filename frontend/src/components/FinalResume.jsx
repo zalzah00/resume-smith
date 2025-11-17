@@ -1,80 +1,150 @@
+// /frontend/src/components/FinalResume.jsx
+
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 
-/**
- * Custom ReactMarkdown components to style the final resume output.
- * It uses Tailwind CSS classes for a professional, clean look.
- */
+// Define custom components to map Markdown elements (h2, p, ul, li, strong)
+// to React components with specific resume styling, focusing on vertical spacing
 const resumeComponents = {
-  // Headings for sections (e.g., Experience, Education)
-  h1: ({ node, ...props }) => (
-    <h1 
-      className="text-2xl font-bold border-b-2 border-indigo-500 pb-1 mb-3 mt-4 text-indigo-700 tracking-wider" 
-      {...props} 
-    />
+  // Style for H2 (##) or H1 (#) to look like a main resume section header
+  h2: ({node, ...props}) => (
+    <h2 style={{
+      color: '#2c3e50',
+      fontSize: '18px',
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      borderBottom: '1px solid #000',
+      // Consistent vertical spacing for main headers
+      marginTop: '25px', 
+      marginBottom: '10px', 
+      paddingBottom: '5px',
+    }} {...props} />
   ),
-  h2: ({ node, ...props }) => (
-    <h2 
-      className="text-xl font-semibold mb-2 mt-4 text-gray-800" 
-      {...props} 
-    />
+  
+  // Style for standard paragraphs (used for summaries, intro text)
+  p: ({node, ...props}) => (
+    <p style={{ 
+      marginTop: '10px', 
+      marginBottom: '10px' 
+    }} {...props} />
   ),
-  // Strong for titles/roles
-  strong: ({ node, ...props }) => (
-    <strong 
-      className="font-bold text-gray-900" 
-      {...props} 
-    />
+
+  // Style for unordered lists (from * or -)
+  ul: ({node, ...props}) => (
+    <ul style={{
+      listStyleType: 'disc',
+      marginLeft: '20px',
+      paddingLeft: '0',
+      marginTop: '10px',
+      marginBottom: '10px'
+    }} {...props} />
   ),
-  // Paragraphs for general text
-  p: ({ node, ...props }) => (
-    <p 
-      className="mb-2 text-gray-700 leading-snug" 
-      {...props} 
-    />
+  
+  // Style for list items (bullets)
+  li: ({node, ...props}) => (
+    <li style={{ 
+      marginBottom: '5px', 
+      paddingLeft: '5px' 
+    }} {...props} />
   ),
-  // Unordered lists for bullet points
-  ul: ({ node, ...props }) => (
-    <ul 
-      className="list-disc list-inside space-y-1 pl-4 mb-4 text-gray-700" 
-      {...props} 
-    />
-  ),
-  // List items for achievements/descriptions
-  li: ({ node, ...props }) => (
-    <li 
-      className="text-sm" 
-      {...props} 
-    />
-  ),
-  // Horizontal Rule for separation (if used)
-  hr: ({ node, ...props }) => (
-    <hr 
-      className="my-6 border-t border-gray-200" 
-      {...props} 
-    />
+  
+  // FIX: Force the bolded sub-headings (e.g., "Cloud & Orchestration") to be block elements.
+  // This ensures the following text/bullet points start on a new line, solving the compression issue.
+  strong: ({node, ...props}) => (
+    <strong style={{ 
+      fontWeight: '700',
+      display: 'block', // Crucial fix: forces the element onto its own line
+      marginBottom: '5px' // Adds a little space between the title and the content
+    }} {...props} />
   ),
 };
 
-/**
- * Component to display the final, formatted resume.
- * @param {object} props
- * @param {string} props.finalResume - The resume text in Markdown format.
- * @param {string} props.className - Tailwind CSS classes for the container.
- */
-const FinalResume = ({ finalResume, className }) => {
+
+const FinalResume = ({ finalResume, loading }) => {
+  if (loading) {
+    return (
+      <div style={{ padding: '20px', textAlign: 'center' }}>
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center',
+          gap: '15px'
+        }}>
+          <div className="loading-spinner"></div>
+          <div>Generating your final resume... This may take a minute.</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!finalResume) {
+    return null;
+  }
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(finalResume);
+      alert('Resume copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
+
   return (
-    <div className={`p-6 bg-white rounded-xl shadow-lg border border-gray-200 h-full overflow-y-auto ${className}`}>
-      <h2 className="text-2xl font-bold text-center text-green-600 mb-4">
-        ✅ Final Resume (Formatted)
-      </h2>
-      <div className="resume-content space-y-3">
-        {/* Process Markdown with custom components for styling */}
-        <ReactMarkdown 
-          remarkPlugins={[remarkGfm]}
-          components={resumeComponents}
+    <div style={{ 
+      padding: '25px', 
+      border: '1px solid #e0e0e0', 
+      borderRadius: '8px', 
+      backgroundColor: 'white',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+    }}>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: '20px',
+        borderBottom: '2px solid #2c3e50',
+        paddingBottom: '10px'
+      }}>
+        <h2 style={{ 
+          color: '#2c3e50',
+          fontSize: '20px',
+          fontWeight: '600',
+          margin: 0
+        }}>
+          📄 Final Transformed Resume
+        </h2>
+        <button
+          onClick={handleCopy}
+          style={{
+            padding: '6px 12px',
+            backgroundColor: '#495057',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: '500'
+          }}
         >
+          📋 Copy to Clipboard
+        </button>
+      </div>
+      
+      <div style={{ 
+        backgroundColor: 'white', 
+        padding: '30px',
+        border: '1px solid #d0d0d0',
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '13px',
+        lineHeight: '1.4',
+        minHeight: '500px',
+        maxHeight: '700px',
+        overflowY: 'auto',
+        color: '#000000',
+        wordWrap: 'break-word'
+      }}>
+        <ReactMarkdown components={resumeComponents}>
           {finalResume}
         </ReactMarkdown>
       </div>
