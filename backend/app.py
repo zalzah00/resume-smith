@@ -7,12 +7,10 @@ import os
 from core import (
     run_part_1_analysis, 
     run_part_2_transformation, 
-    run_part_3_formatting,  # <-- 1. NEW: Import formatting function
     docx_to_text,
     CLIENT_AVAILABLE,
     FINAL_API_STATUS,
-    logger,
-    GROQ_MODEL # Need GROQ_MODEL for formatting step configuration
+    logger
 )
 import tempfile
 import asyncio
@@ -51,49 +49,49 @@ async def analyze_resume(
     jd: UploadFile = File(...)
 ):
     """
-    Process resume and job description files for Part 1 analysis and questions.
+    Process resume and job description files for Part 1 analysis
     """
     if not CLIENT_AVAILABLE:
         raise HTTPException(status_code=500, detail="No LLM clients available. Check API keys.")
     
     if provider not in ["Gemini", "Groq"]:
         raise HTTPException(status_code=400, detail="Provider must be 'Gemini' or 'Groq'")
-
-    # --- File handling logic (Unchanged) ---
+    
     try:
-        # Save files temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{resume.filename.split('.')[-1]}") as r_tmp:
-            r_tmp.write(await resume.read())
-            resume_path = r_tmp.name
+        # Save uploaded files temporarily and extract text
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as resume_temp:
+            resume_content = await resume.read()
+            resume_temp.write(resume_content)
+            resume_temp_path = resume_temp.name
         
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{jd.filename.split('.')[-1]}") as j_tmp:
-            j_tmp.write(await jd.read())
-            jd_path = j_tmp.name
-
-        # Convert to text
-        resume_text = docx_to_text(resume_path)
-        jd_text = docx_to_text(jd_path)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as jd_temp:
+            jd_content = await jd.read()
+            jd_temp.write(jd_content)
+            jd_temp_path = jd_temp.name
         
-        # Clean up temp files
-        os.unlink(resume_path)
-        os.unlink(jd_path)
+        # Extract text from DOCX files
+        resume_text = docx_to_text(resume_temp_path, "RESUME")
+        jd_text = docx_to_text(jd_temp_path, "JD")
         
-        if "ERROR" in resume_text or "ERROR" in jd_text:
-            raise Exception("File conversion error.")
-
+        # Clean up temporary files
+        os.unlink(resume_temp_path)
+        os.unlink(jd_temp_path)
+        
+        # Check for extraction errors
+        if "ERROR" in resume_text:
+            raise HTTPException(status_code=400, detail=f"Resume file error: {resume_text}")
+        if "ERROR" in jd_text:
+            raise HTTPException(status_code=400, detail=f"Job description file error: {jd_text}")
+        
         # Run Part 1 analysis
-        part_1_analysis = run_part_1_analysis(
-            provider=provider,
-            resume_text=resume_text,
-            jd_text=jd_text
-        )
+        analysis_result = run_part_1_analysis(provider, resume_text, jd_text)
         
-        if "ERROR" in part_1_analysis:
-            raise HTTPException(status_code=500, detail=part_1_analysis)
-
+        if "ERROR" in analysis_result:
+            raise HTTPException(status_code=500, detail=analysis_result)
+        
         return {
             "status": "success",
-            "part_1_analysis": part_1_analysis,
+            "analysis": analysis_result,
             "resume_text": resume_text,
             "jd_text": jd_text
         }
@@ -102,7 +100,6 @@ async def analyze_resume(
         logger.error(f"Error in analyze_resume: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
 
-# --- /api/transform endpoint MODIFIED to chain calls (Part 2 and Part 3) ---
 @app.post("/api/transform")
 async def transform_resume(
     provider: str = Form(...),
@@ -112,8 +109,7 @@ async def transform_resume(
     user_answers: str = Form(...)
 ):
     """
-    Generate final transformed resume by chaining Part 2 (drafting) and 
-    Part 3 (formatting) internally.
+    Generate final transformed resume based on user answers (Part 2)
     """
     if not CLIENT_AVAILABLE:
         raise HTTPException(status_code=500, detail="No LLM clients available. Check API keys.")
@@ -122,45 +118,29 @@ async def transform_resume(
         raise HTTPException(status_code=400, detail="Provider must be 'Gemini' or 'Groq'")
     
     try:
-        # 1. Execute Part 2: Generate the RAW RESUME DRAFT
-        logger.info("Starting Part 2: Transformation (Drafting)...")
-        raw_resume_draft = run_part_2_transformation(
+        # Run Part 2 transformation
+        final_resume = run_part_2_transformation(
             provider=provider,
             resume_text=resume_text,
             jd_text=jd_text,
             part_1_analysis=part_1_analysis,
             user_answers=user_answers
         )
-
-        if "ERROR" in raw_resume_draft:
-            logger.error(f"Part 2 error: {raw_resume_draft}")
-            raise HTTPException(status_code=500, detail=raw_resume_draft)
-
-        # 2. Execute Part 3: Format the RAW DRAFT (Internal Chaining)
-        logger.info("Transformation complete. Starting Part 3: Formatting...")
         
-        # Default to Groq for formatting if available due to high speed/low latency
-        formatting_provider = 'Groq' if CLIENT_AVAILABLE.get('Groq') else provider
+        if "ERROR" in final_resume:
+            raise HTTPException(status_code=500, detail=final_resume)
         
-        final_formatted_resume = run_part_3_formatting(
-            raw_resume_text=raw_resume_draft,
-            provider=formatting_provider,
-            model_name=GROQ_MODEL # Using the higher-end Groq model for quality formatting
-        )
-        
-        if "ERROR" in final_formatted_resume:
-            logger.error(f"Part 3 formatting error: {final_formatted_resume}")
-            raise HTTPException(status_code=500, detail=final_formatted_resume)
-
-        logger.info("Part 3 Formatting complete. Returning final result.")
         return {
             "status": "success",
-            "final_resume": final_formatted_resume
+            "final_resume": final_resume
         }
         
-    except HTTPException:
-        # Re-raise HTTP exceptions
-        raise
     except Exception as e:
         logger.error(f"Error in transform_resume: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error during transformation/formatting chain: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Transformation error: {str(e)}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# end_of_file
