@@ -14,9 +14,8 @@ const resumeComponents = {
       fontWeight: '700',
       textTransform: 'uppercase',
       borderBottom: '1px solid #000',
-      // Increased top margin for separation from content above
+      // Consistent vertical spacing for main headers
       marginTop: '25px', 
-      // Increased bottom margin to push content below the section title
       marginBottom: '10px', 
       paddingBottom: '5px',
     }} {...props} />
@@ -25,9 +24,7 @@ const resumeComponents = {
   // Style for standard paragraphs (used for summaries, intro text)
   p: ({node, ...props}) => (
     <p style={{ 
-      // Added margin-top to separate it from the header above
       marginTop: '10px', 
-      // Consistent spacing after the paragraph
       marginBottom: '10px' 
     }} {...props} />
   ),
@@ -38,7 +35,6 @@ const resumeComponents = {
       listStyleType: 'disc',
       marginLeft: '20px',
       paddingLeft: '0',
-      // Consistent spacing before and after the list
       marginTop: '10px',
       marginBottom: '10px'
     }} {...props} />
@@ -47,15 +43,19 @@ const resumeComponents = {
   // Style for list items (bullets)
   li: ({node, ...props}) => (
     <li style={{ 
-      // Small margin at the bottom of each bullet for breathing room
       marginBottom: '5px', 
       paddingLeft: '5px' 
     }} {...props} />
   ),
   
-  // Style for bold text (from **) to ensure it's prominent
+  // FIX: Force the bolded sub-headings (e.g., "Cloud & Orchestration") to be block elements.
+  // This ensures the following text/bullet points start on a new line, solving the compression issue.
   strong: ({node, ...props}) => (
-    <strong style={{ fontWeight: '700' }} {...props} />
+    <strong style={{ 
+      fontWeight: '700',
+      display: 'block', // Crucial fix: forces the element onto its own line
+      marginBottom: '5px' // Adds a little space between the title and the content
+    }} {...props} />
   ),
 };
 
@@ -131,7 +131,6 @@ const FinalResume = ({ finalResume, loading }) => {
         </button>
       </div>
       
-      {/* Updated Content Area: Uses ReactMarkdown for rich-text rendering */}
       <div style={{ 
         backgroundColor: 'white', 
         padding: '30px',
@@ -154,5 +153,3 @@ const FinalResume = ({ finalResume, loading }) => {
 };
 
 export default FinalResume;
-
-// end_of_file
