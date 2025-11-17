@@ -1,6 +1,51 @@
 // /frontend/src/components/FinalResume.jsx
 
 import React from 'react';
+// 1. Import the ReactMarkdown library
+import ReactMarkdown from 'react-markdown';
+
+// Define custom components to map Markdown elements (h2, ul, li, strong)
+// to React components with specific resume styling.
+const resumeComponents = {
+  // Style for H2 (##) or H1 (#) to look like a main resume section header
+  h2: ({node, ...props}) => (
+    <h2 style={{
+      color: '#2c3e50',
+      fontSize: '18px',
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      borderBottom: '1px solid #000',
+      paddingBottom: '5px',
+      marginTop: '25px',
+      marginBottom: '10px'
+    }} {...props} />
+  ),
+  // Style for unordered lists (from * or -)
+  ul: ({node, ...props}) => (
+    <ul style={{
+      listStyleType: 'disc',
+      marginLeft: '20px',
+      paddingLeft: '0',
+      marginBottom: '10px'
+    }} {...props} />
+  ),
+  // Style for list items (bullets)
+  li: ({node, ...props}) => (
+    <li style={{ 
+      marginBottom: '5px',
+      paddingLeft: '5px' 
+    }} {...props} />
+  ),
+  // Style for bold text (from **) to ensure it's prominent
+  strong: ({node, ...props}) => (
+    <strong style={{ fontWeight: '700' }} {...props} />
+  ),
+  // Ensure paragraphs (for things like summary) have proper spacing
+  p: ({node, ...props}) => (
+    <p style={{ marginBottom: '10px' }} {...props} />
+  ),
+};
+
 
 const FinalResume = ({ finalResume, loading }) => {
   if (loading) {
@@ -73,6 +118,7 @@ const FinalResume = ({ finalResume, loading }) => {
         </button>
       </div>
       
+      {/* Updated Content Area: Removed pre-wrap and added ReactMarkdown */}
       <div style={{ 
         backgroundColor: 'white', 
         padding: '30px',
@@ -84,10 +130,13 @@ const FinalResume = ({ finalResume, loading }) => {
         maxHeight: '700px',
         overflowY: 'auto',
         color: '#000000',
-        whiteSpace: 'pre-wrap', // This preserves ALL spacing and line breaks
+        // whiteSpace: 'pre-wrap' is removed because ReactMarkdown handles formatting
         wordWrap: 'break-word'
       }}>
-        {finalResume}
+        {/* 2. Use ReactMarkdown to render the content */}
+        <ReactMarkdown components={resumeComponents}>
+          {finalResume}
+        </ReactMarkdown>
       </div>
     </div>
   );
