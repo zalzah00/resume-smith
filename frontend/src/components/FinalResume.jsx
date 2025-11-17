@@ -1,11 +1,10 @@
 // /frontend/src/components/FinalResume.jsx
 
 import React from 'react';
-// 1. Import the ReactMarkdown library
 import ReactMarkdown from 'react-markdown';
 
-// Define custom components to map Markdown elements (h2, ul, li, strong)
-// to React components with specific resume styling.
+// Define custom components to map Markdown elements (h2, p, ul, li, strong)
+// to React components with specific resume styling, focusing on vertical spacing
 const resumeComponents = {
   // Style for H2 (##) or H1 (#) to look like a main resume section header
   h2: ({node, ...props}) => (
@@ -15,34 +14,48 @@ const resumeComponents = {
       fontWeight: '700',
       textTransform: 'uppercase',
       borderBottom: '1px solid #000',
+      // Increased top margin for separation from content above
+      marginTop: '25px', 
+      // Increased bottom margin to push content below the section title
+      marginBottom: '10px', 
       paddingBottom: '5px',
-      marginTop: '25px',
-      marginBottom: '10px'
     }} {...props} />
   ),
+  
+  // Style for standard paragraphs (used for summaries, intro text)
+  p: ({node, ...props}) => (
+    <p style={{ 
+      // Added margin-top to separate it from the header above
+      marginTop: '10px', 
+      // Consistent spacing after the paragraph
+      marginBottom: '10px' 
+    }} {...props} />
+  ),
+
   // Style for unordered lists (from * or -)
   ul: ({node, ...props}) => (
     <ul style={{
       listStyleType: 'disc',
       marginLeft: '20px',
       paddingLeft: '0',
+      // Consistent spacing before and after the list
+      marginTop: '10px',
       marginBottom: '10px'
     }} {...props} />
   ),
+  
   // Style for list items (bullets)
   li: ({node, ...props}) => (
     <li style={{ 
-      marginBottom: '5px',
+      // Small margin at the bottom of each bullet for breathing room
+      marginBottom: '5px', 
       paddingLeft: '5px' 
     }} {...props} />
   ),
+  
   // Style for bold text (from **) to ensure it's prominent
   strong: ({node, ...props}) => (
     <strong style={{ fontWeight: '700' }} {...props} />
-  ),
-  // Ensure paragraphs (for things like summary) have proper spacing
-  p: ({node, ...props}) => (
-    <p style={{ marginBottom: '10px' }} {...props} />
   ),
 };
 
@@ -118,7 +131,7 @@ const FinalResume = ({ finalResume, loading }) => {
         </button>
       </div>
       
-      {/* Updated Content Area: Removed pre-wrap and added ReactMarkdown */}
+      {/* Updated Content Area: Uses ReactMarkdown for rich-text rendering */}
       <div style={{ 
         backgroundColor: 'white', 
         padding: '30px',
@@ -130,10 +143,8 @@ const FinalResume = ({ finalResume, loading }) => {
         maxHeight: '700px',
         overflowY: 'auto',
         color: '#000000',
-        // whiteSpace: 'pre-wrap' is removed because ReactMarkdown handles formatting
         wordWrap: 'break-word'
       }}>
-        {/* 2. Use ReactMarkdown to render the content */}
         <ReactMarkdown components={resumeComponents}>
           {finalResume}
         </ReactMarkdown>
