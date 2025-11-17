@@ -2,22 +2,27 @@
 
 import React from 'react';
 
-const FileUpload = ({ provider, setProvider, resumeFile, setResumeFile, jdFile, setJdFile, onAnalyze, loading }) => {
-  const handleResumeUpload = (e) => {
-    const file = e.target.files[0];
-    if (file && file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      setResumeFile(file);
-    } else {
-      alert('Please upload a .docx file for resume');
-    }
-  };
+// Allowed extensions for local validation/hints
+const ALLOWED_EXTENSIONS = ['.docx', '.pdf', '.txt'];
 
-  const handleJdUpload = (e) => {
+const FileUpload = ({ provider, setProvider, resumeFile, setResumeFile, jdFile, setJdFile, onAnalyze, loading }) => {
+  
+  const isValidFile = (file) => {
+    if (!file) return false;
+    const extension = '.' + file.name.split('.').pop().toLowerCase();
+    return ALLOWED_EXTENSIONS.includes(extension);
+  }
+
+  const handleFileUpload = (e, setFile) => {
     const file = e.target.files[0];
-    if (file && file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      setJdFile(file);
+    if (file && isValidFile(file)) {
+      setFile(file);
+    } else if (file) {
+      alert(`Please upload a file with one of the following extensions: ${ALLOWED_EXTENSIONS.join(', ')}`);
+      setFile(null);
+      e.target.value = ''; // Clear the input
     } else {
-      alert('Please upload a .docx file for job description');
+      setFile(null);
     }
   };
 
@@ -55,12 +60,12 @@ const FileUpload = ({ provider, setProvider, resumeFile, setResumeFile, jdFile, 
 
       <div style={{ marginBottom: '15px' }}>
         <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-          Resume (.docx):
+          Resume (.docx, .pdf, .txt):
         </label>
         <input
           type="file"
-          accept=".docx"
-          onChange={handleResumeUpload}
+          accept=".docx,.pdf,.txt" // Updated accept attribute
+          onChange={(e) => handleFileUpload(e, setResumeFile)}
           disabled={loading}
           style={{ width: '100%' }}
         />
@@ -73,12 +78,12 @@ const FileUpload = ({ provider, setProvider, resumeFile, setResumeFile, jdFile, 
 
       <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-          Job Description (.docx):
+          Job Description (.docx, .pdf, .txt):
         </label>
         <input
           type="file"
-          accept=".docx"
-          onChange={handleJdUpload}
+          accept=".docx,.pdf,.txt" // Updated accept attribute
+          onChange={(e) => handleFileUpload(e, setJdFile)}
           disabled={loading}
           style={{ width: '100%' }}
         />
@@ -109,3 +114,4 @@ const FileUpload = ({ provider, setProvider, resumeFile, setResumeFile, jdFile, 
 };
 
 export default FileUpload;
+// end_of_file

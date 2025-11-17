@@ -4,6 +4,8 @@ import os
 import logging
 import sys
 import docx2txt
+# Import PyMuPDF for PDF handling
+import fitz # PyMuPDF is imported as fitz
 from pathlib import Path
 from google import genai
 from google.genai import types
@@ -126,21 +128,60 @@ The final output must consist ONLY of the text of the transformed resume. Do not
 """
 
 # --- Utility Functions ---
-def docx_to_text(docx_file_path, doc_type):
-    """Extracts text content from a .docx file using docx2txt."""
-    if docx_file_path is None:
-        return ""
+def _extract_text_from_pdf(pdf_file_path):
+    """Extracts text content from a .pdf file using PyMuPDF."""
+    text = ""
     try:
-        text = docx2txt.process(docx_file_path)
-        text = '\n'.join([line.strip() for line in text.splitlines() if line.strip()])
-
-        logger.info(f"--- Extracted {doc_type} Text (First 500 chars) ---\n{text[:500]}...")
-        logger.debug(f"--- Full Extracted {doc_type} Text ---\n{text}")
+        doc = fitz.open(pdf_file_path)
+        for page in doc:
+            text += page.get_text()
+        doc.close()
         return text
     except Exception as e:
-        error_msg = f"ERROR: Could not read DOCX file ({doc_type}). Details: {e}"
-        logger.error(error_msg)
-        return error_msg
+        logger.error(f"ERROR: Could not read PDF file. Details: {e}")
+        return f"ERROR: Could not read PDF file. Details: {e}"
+
+def _extract_text_from_txt(txt_file_path):
+    """Reads text content from a .txt file."""
+    try:
+        with open(txt_file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        logger.error(f"ERROR: Could not read TXT file. Details: {e}")
+        return f"ERROR: Could not read TXT file. Details: {e}"
+
+def _extract_text_from_docx(docx_file_path):
+    """Extracts text content from a .docx file using docx2txt."""
+    try:
+        return docx2txt.process(docx_file_path)
+    except Exception as e:
+        logger.error(f"ERROR: Could not read DOCX file. Details: {e}")
+        return f"ERROR: Could not read DOCX file. Details: {e}"
+
+def extract_text_from_file(file_path, doc_type):
+    """Generic function to extract text based on file extension."""
+    if file_path is None:
+        return ""
+    
+    file_extension = Path(file_path).suffix.lower()
+    text = ""
+
+    if file_extension == '.docx':
+        text = _extract_text_from_docx(file_path)
+    elif file_extension == '.pdf':
+        text = _extract_text_from_pdf(file_path)
+    elif file_extension == '.txt':
+        text = _extract_text_from_txt(file_path)
+    else:
+        return f"ERROR: Unsupported file type: {file_extension}"
+
+    # Standard text cleaning (applies to all formats)
+    if not text.startswith("ERROR:"):
+        text = '\n'.join([line.strip() for line in text.splitlines() if line.strip()])
+
+    logger.info(f"--- Extracted {doc_type} Text ({file_extension}) (First 500 chars) ---\n{text[:500]}...")
+    logger.debug(f"--- Full Extracted {doc_type} Text ---\n{text}")
+    return text
 
 # --- Core LLM Functions ---
 def _generate_content_with_config(provider, model_name, prompt):
