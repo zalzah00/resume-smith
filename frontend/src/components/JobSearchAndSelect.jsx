@@ -24,10 +24,13 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
     
     // State for Pagination
     const [results, setResults] = useState([]);
-    const [currentPage, setCurrentPage] = useState(1); // Tracks the current page number
-    const [totalResults, setTotalResults] = useState(0); // Tracks the total jobs available
-    const [isInitialSearch, setIsInitialSearch] = useState(true); // Helps reset state for a new search
+    const [currentPage, setCurrentPage] = useState(1); 
+    const [totalResults, setTotalResults] = useState(0); 
     
+    // NEW STATE: Tracks how many items were returned in the last API call.
+    const [lastFetchedCount, setLastFetchedCount] = useState(0); 
+    
+    const [isInitialSearch, setIsInitialSearch] = useState(true); 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     
@@ -35,7 +38,6 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
     // Function to handle the actual API call
     const fetchJobs = async (pageToFetch, clearResults) => {
         setLoading(true);
-        // Clear error only when starting a fetch, not when loading more
         if (clearResults) { 
             setError(null);
         }
@@ -54,23 +56,25 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
             console.log('Searching with params:', params);
             const data = await searchJobs(params);
             
-            // Assuming the API response structure: data.data.result and data.data.total_records
             const jobResults = data?.data?.result || [];
             const newTotal = data?.data?.total_records || 0;
 
             if (clearResults) {
                 // Initial search or new search
                 setResults(jobResults);
-                setCurrentPage(pageToFetch); 
             } else {
                 // Load More button click - Append results
                 setResults(prevResults => [...prevResults, ...jobResults]);
-                setCurrentPage(pageToFetch); // Update the page state on success
             }
             
+            // Update successful fetch states
+            setCurrentPage(pageToFetch); 
             setTotalResults(newTotal);
+            // This is the key fix: record how many items were actually returned
+            setLastFetchedCount(jobResults.length); 
+            
 
-            // FIX 1: Only set an error if the actual jobResults array is empty.
+            // Only set an error if the actual jobResults array is empty.
             if (jobResults.length === 0 && clearResults) {
                  setError("No jobs found matching your criteria.");
             }
@@ -88,7 +92,9 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
     const handleSearch = async (e) => {
         e.preventDefault();
         
+        setResults([]); // Clear results immediately
         setTotalResults(0);
+        setLastFetchedCount(0); // Reset fetch count
         setCurrentPage(1); // Ensure start from page 1
         setIsInitialSearch(true); 
         
@@ -114,12 +120,15 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         setCurrentPage(1); // Reset page state
     };
 
-    // Check if there are more pages to load
-    const hasMoreResults = results.length < totalResults;
-    // Determine if we are loading the initial page (to show 'Searching...' on the main button)
+    // FIXED LOGIC: Show "Load More" if the last fetch returned a full page size (PER_PAGE_COUNT)
+    // This overrides the unreliable 'totalResults' count.
+    const hasMoreResults = lastFetchedCount === PER_PAGE_COUNT;
+    
+    // Determine if we are loading the initial page 
     const isSearchingFirstPage = isInitialSearch && loading; 
     
-    // FIX 2: Ensure the displayed total is never less than the number of jobs currently displayed
+    // Ensure the displayed total is never less than the number of jobs currently displayed
+    // In case totalResults is 0 but we have 5 results, this will show 5.
     const displayTotalResults = Math.max(results.length, totalResults);
 
     if (selectedJdTitle) {
@@ -175,7 +184,8 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
             
             {results.length > 0 && (
                 <div className="search-results">
-                    <h4>Showing {results.length} of {displayTotalResults} Results:</h4>
+                    {/* Use results.length here, and a MAX of results.length and totalResults for the total count */}
+                    <h4>Showing {results.length} of {displayTotalResults === results.length ? 'many' : displayTotalResults} Results:</h4>
                     {results.map((item, index) => (
                         <div key={index} className="job-card">
                             <div className="job-details">
@@ -191,20 +201,21 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
                         </div>
                     ))}
                     
-                    {/* Load More Button */}
+                    {/* Load More Button - appears if the last fetch returned a full page */}
                     {hasMoreResults && (
                         <button 
                             onClick={handleLoadMore} 
-                            disabled={loading && !isSearchingFirstPage} // Disable only when loading more
+                            disabled={loading && !isSearchingFirstPage} 
                             className="button load-more-button"
                         >
-                            {loading && !isSearchingFirstPage ? 'Loading More...' : `Load More Jobs (${displayTotalResults - results.length} left)`}
+                            {loading && !isSearchingFirstPage ? 'Loading More...' : `Load More Jobs (Page ${currentPage + 1})`}
                         </button>
                     )}
 
-                    {results.length === displayTotalResults && displayTotalResults > 0 && (
+                    {/* Display message when all known results are loaded */}
+                    {!hasMoreResults && results.length > 0 && (
                         <div className="search-status-box all-loaded">
-                            <p>All {displayTotalResults} results loaded.</p>
+                            <p>All visible results loaded.</p>
                         </div>
                     )}
                 </div>
