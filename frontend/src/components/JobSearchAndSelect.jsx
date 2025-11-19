@@ -30,13 +30,16 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
     // Tracks how many items were returned in the last API call.
     const [lastFetchedCount, setLastFetchedCount] = useState(0); 
     
+    // V2: NEW STATE for row selection
+    const [highlightedJobIndex, setHighlightedJobIndex] = useState(null); 
+    
     const [isInitialSearch, setIsInitialSearch] = useState(true); 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     
 
     // Function to handle the actual API call
-    const fetchJobs = async (pageToFetch) => { // Removed 'clearResults' as the logic handles clear vs. replace
+    const fetchJobs = async (pageToFetch) => { 
         setLoading(true);
         setError(null);
 
@@ -57,17 +60,17 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
             const jobResults = data?.data?.result || [];
             const newTotal = data?.data?.total_records || 0;
 
-            // --- REVISED PAGINATION LOGIC ---
             // TRADITIONAL PAGINATION: Always REPLACE results, never append.
             setResults(jobResults);
-            // --------------------------------
+            
+            // V2: Reset highlight when loading new page
+            setHighlightedJobIndex(null); 
 
             // Update successful fetch states
             setCurrentPage(pageToFetch); 
             setTotalResults(newTotal);
             setLastFetchedCount(jobResults.length); 
             
-
             // Only set an error if the actual jobResults array is empty.
             if (jobResults.length === 0 && pageToFetch === 1) {
                  setError("No jobs found matching your criteria.");
@@ -82,11 +85,11 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         }
     }
 
-    // Handler for form submission (Always starts a new search, fetching page 1)
+    // Handler for form submission (unchanged)
     const handleSearch = async (e) => {
         e.preventDefault();
         
-        setResults([]); // Clear results immediately
+        setResults([]); 
         setTotalResults(0);
         setLastFetchedCount(0);
         setCurrentPage(1); 
@@ -95,55 +98,53 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         await fetchJobs(1); // Fetch page 1
     };
 
-    // Handler for the "Next Page" button
+    // V2: NEW HANDLER for clicking a table row to select and highlight
+    const handleRowClick = (jobItem, index) => {
+        // 1. Highlight the row
+        setHighlightedJobIndex(index); 
+
+        // 2. Select the job and pass data to the parent component
+        const title = jobItem.job?.Title || 'Selected Job';
+        const company = jobItem.company?.CompanyName || 'N/A';
+        const description = jobItem.job?.JobDescription || '';
+        
+        setJdText(description, title, company);
+    };
+
+    // Handler for the "Next Page" button (unchanged)
     const handleNextPage = () => {
         const nextPage = currentPage + 1;
         fetchJobs(nextPage);
     };
 
-    // Handler for the "Previous Page" button
+    // Handler for the "Previous Page" button (unchanged)
     const handlePrevPage = () => {
         const prevPage = currentPage - 1;
         if (prevPage >= 1) {
             fetchJobs(prevPage);
         }
     };
-
-
-    const handleSelectJob = (jobItem) => {
-        const title = jobItem.job?.Title || 'Selected Job';
-        const company = jobItem.company?.CompanyName || 'N/A';
-        const description = jobItem.job?.JobDescription || '';
-        
-        setJdText(description, title, company);
-        setResults([]); 
-        setTotalResults(0); 
-        setCurrentPage(1); 
-    };
-
-    // Show "Next Page" button if the last fetch returned a full page size (5)
+    
+    // Derived state (unchanged)
     const hasNextPage = lastFetchedCount === PER_PAGE_COUNT;
     const hasPrevPage = currentPage > 1;
-    
-    // Determine if we are loading the initial page 
     const isSearchingFirstPage = isInitialSearch && loading; 
-    
-    // Ensure the displayed total is never less than the number of jobs currently displayed
     const displayTotalResults = Math.max(results.length, totalResults);
-    
-    // Calculate the range of jobs being shown
     const startRange = results.length > 0 ? (currentPage - 1) * PER_PAGE_COUNT + 1 : 0;
     const endRange = startRange > 0 ? startRange + results.length - 1 : 0;
 
 
     if (selectedJdTitle) {
-        // Display the selected job confirmation
+        // Updated to clear the highlight when changing the job
         return (
             <div className="search-status-box selected">
                 <h3>✅ Job Selected</h3>
                 <p><strong>Job Title:</strong> {selectedJdTitle}</p>
                 <button 
-                    onClick={onDeselect} 
+                    onClick={() => {
+                        setHighlightedJobIndex(null); // Clear highlight on deselect
+                        onDeselect(); // Clear parent selection
+                    }} 
                     className="button deselect"
                 >
                     Change Job
@@ -154,7 +155,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
 
     return (
         <div className="job-search-container">
-            <h3>1. Search for a Job Description</h3>
+            <h3>1. Search for a Job Description (Click Row to Select)</h3>
             <form onSubmit={handleSearch} className="search-form">
                 <input
                     type="text"
@@ -189,25 +190,43 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
             
             {results.length > 0 && (
                 <div className="search-results">
-                    {/* Updated Header for Traditional Pagination */}
                     <h4>
                         Showing {startRange}-{endRange} of {displayTotalResults === results.length && !hasNextPage ? results.length : 'many'} Results:
                     </h4>
 
-                    {results.map((item, index) => (
-                        <div key={index} className="job-card">
-                            <div className="job-details">
-                                <strong>{item.job?.Title || 'N/A'}</strong>
-                                <span>{item.company?.CompanyName || 'N/A'}</span>
-                            </div>
-                            <button 
-                                onClick={() => handleSelectJob(item)} 
-                                className="button select-job"
-                            >
-                                Select This Job
-                            </button>
-                        </div>
-                    ))}
+                    {/* V2: Tabular Display */}
+                    <table className="job-results-table">
+                        <thead>
+                            <tr>
+                                <th style={{width: '30%'}}>Job Title / Company</th>
+                                <th style={{width: '70%'}}>Job Description Snippet</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {results.map((item, index) => {
+                                const jdText = item.job?.JobDescription || 'No description provided.';
+                                // Display first 200 characters as snippet
+                                const jdSnippet = jdText.substring(0, 200) + (jdText.length > 200 ? '...' : '');
+
+                                return (
+                                    <tr 
+                                        key={index} 
+                                        className={index === highlightedJobIndex ? 'selected-row' : ''}
+                                        onClick={() => handleRowClick(item, index)} 
+                                    >
+                                        <td>
+                                            <strong>{item.job?.Title || 'N/A'}</strong>
+                                            <br />
+                                            <span className="company-name">{item.company?.CompanyName || 'N/A'}</span>
+                                        </td>
+                                        <td className="jd-snippet-cell">
+                                            {jdSnippet}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                     
                     {/* Pagination Controls */}
                     <div className="pagination-controls">
@@ -230,7 +249,6 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
                         </button>
                     </div>
 
-                    {/* Display message when all known results are loaded */}
                     {!hasNextPage && results.length > 0 && (
                         <div className="search-status-box all-loaded">
                             <p>All visible results loaded.</p>

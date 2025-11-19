@@ -1,236 +1,87 @@
-/* JobSearchAndSelect.css */
+/* --- V2 Tabular Display Styles --- */
 
-:root {
-  --primary-color: #1e3a8a;
-  --primary-light: #3b82f6;
-  --primary-dark: #1e40af;
-  --success-color: #16a34a;
-  --danger-color: #dc2626;
-  --warning-color: #ea580c;
-  --neutral-50: #f9fafb;
-  --neutral-100: #f3f4f6;
-  --neutral-200: #e5e7eb;
-  --neutral-300: #d1d5db;
-  --neutral-600: #4b5563;
-  --neutral-700: #374151;
-  --neutral-900: #111827;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+.job-results-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.search-status-box {
-  background: white;
-  border: 2px solid var(--neutral-200);
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 36px; /* increased spacing between section 1 and next section */
-  box-shadow: var(--shadow-md);
-  transition: all 0.3s ease;
+.job-results-table th, 
+.job-results-table td {
+    border: 1px solid #ddd;
+    padding: 10px 15px;
+    text-align: left;
+    vertical-align: top;
 }
 
-.search-status-box.selected {
-  border-color: var(--success-color);
-  background: linear-gradient(135deg, rgba(22, 163, 74, 0.05) 0%, rgba(22, 163, 74, 0.02) 100%);
+.job-results-table th {
+    background-color: #f4f4f4;
+    font-weight: bold;
+    color: #333;
 }
 
-.search-status-box h3 {
-  margin: 0 0 12px 0;
-  color: var(--neutral-900);
-  font-size: 1.125rem;
-  font-weight: 600;
+/* Row Hover and Selection Styling */
+.job-results-table tbody tr {
+    transition: background-color 0.2s ease, border-left 0.2s ease;
 }
 
-.search-status-box p {
-  margin: 8px 0;
-  color: var(--neutral-700);
-  font-size: 0.95rem;
+.job-results-table tbody tr:hover {
+    cursor: pointer;
+    background-color: #e6f7ff; /* Light blue hover */
 }
 
-.search-status-box button {
-  background-color: var(--danger-color);
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  margin-top: 12px;
+/* Highlight for the currently selected job */
+.job-results-table tbody tr.selected-row {
+    background-color: #d0e0ff; /* Distinct blue highlight */
+    border-left: 5px solid #0056b3; /* Stronger border for emphasis */
 }
 
-.search-status-box button:hover {
-  background-color: #b91c1c;
+.job-results-table .company-name {
+    display: block;
+    font-size: 0.9em;
+    color: #555;
+    margin-top: 2px;
 }
 
-.search-form {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 36px; /* extra breathing room between form and results */
-  box-shadow: var(--shadow-md);
+.job-results-table .jd-snippet-cell {
+    font-size: 0.9em;
+    color: #444;
+    line-height: 1.4;
 }
 
-.search-form h3 {
-  margin: 0 0 20px 0;
-  color: var(--neutral-900);
-  font-size: 1.125rem;
-  font-weight: 600;
+/* Pagination Controls Styling */
+.pagination-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 20px 0;
+    gap: 15px;
 }
 
-.search-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
+.pagination-controls .page-status {
+    font-weight: bold;
+    color: #333;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
+/* Ensure buttons in controls look consistent */
+.pagination-controls .button {
+    padding: 8px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--neutral-700);
+.pagination-controls .button:hover:not(:disabled) {
+    background-color: #0056b3;
 }
 
-.form-group input,
-.form-group select {
-  padding: 10px 12px;
-  border: 1px solid var(--neutral-300);
-  border-radius: 6px;
-  font-size: 0.95rem;
-  font-family: inherit;
-  transition: border-color 0.2s, box-shadow 0.2s;
+.pagination-controls .button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
 }
 
-.form-group input:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: var(--primary-light);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.search-button {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-  color: white;
-  border: none;
-  padding: 10px 20px; /* slightly reduced to match other buttons */
-  border-radius: 6px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  box-shadow: var(--shadow-md);
-}
-
-.search-button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-}
-
-.search-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.search-results {
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: var(--shadow-md);
-}
-
-.search-results h4 {
-  margin: 0;
-  padding: 16px 20px;
-  background-color: var(--neutral-100);
-  border-bottom: 1px solid var(--neutral-200);
-  color: var(--neutral-900);
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-.job-item {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--neutral-200);
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.job-item:last-child {
-  border-bottom: none;
-}
-
-.job-item:hover {
-  background-color: var(--neutral-50);
-}
-
-.job-item-title {
-  font-weight: 600;
-  color: var(--primary-color);
-  margin-bottom: 4px;
-  font-size: 0.95rem;
-}
-
-.job-item-company {
-  color: var(--neutral-700);
-  font-size: 0.875rem;
-  margin-bottom: 2px;
-}
-
-.job-item-details {
-  color: var(--neutral-600);
-  font-size: 0.825rem;
-  margin-bottom: 4px;
-}
-
-.job-item button {
-  background-color: var(--primary-light);
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  margin-top: 8px;
-}
-
-.job-item button:hover {
-  background-color: var(--primary-dark);
-}
-
-.error-message {
-  background-color: rgba(220, 38, 38, 0.1);
-  border: 1px solid #fecaca;
-  color: #991b1b;
-  padding: 12px 16px;
-  border-radius: 6px;
-  margin-bottom: 16px;
-  font-size: 0.875rem;
-}
-
-.loading-message {
-  text-align: center;
-  color: var(--neutral-600);
-  padding: 20px;
-  font-size: 0.95rem;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .search-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .search-form {
-    padding: 16px;
-  }
-}
+/* You may need to keep or adjust existing styles for .job-search-container, .search-form, etc. */
