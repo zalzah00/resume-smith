@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import './App.css';
 import UserInput from './components/UserInput';
 import AnalysisResults from './components/AnalysisResults';
-import JobSearchAndSelect from './components/JobSearchAndSelect'; // NEW IMPORT
+import JobSearchAndSelect from './components/JobSearchAndSelect'; 
 import { analyzeResume, transformResume } from './services/api';
 
 const App = () => {
@@ -90,19 +90,19 @@ const App = () => {
       </header>
       
       <main className="App-main">
-        {/* Job Search & Select Component */}
+        {/* Job Search & Select Component - ADDING new props */}
         <JobSearchAndSelect 
             setJdText={handleSetJdText}
             selectedJdTitle={selectedJdTitle}
             onDeselect={handleDeselect}
+            selectedCompany={selectedCompany} // NEW
+            fullJdText={jdText}               // NEW
         />
 
         <UserInput 
           // Passed resumeFile and setResumeFile (NO CHANGE)
           resumeFile={resumeFile}
           setResumeFile={setResumeFile}
-          
-          // Removed jdFile related props
           
           // LLM Provider (NO CHANGE)
           provider={provider}

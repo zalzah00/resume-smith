@@ -16,7 +16,8 @@ const getDisplayName = (code, configKey) => {
 
 const PER_PAGE_COUNT = 5; // Define the fixed number of results per page
 
-const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
+// ACCEPTING new props: selectedCompany and fullJdText
+const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJdText, onDeselect }) => {
     const [keyword, setKeyword] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(CONFIG.JOB_CATEGORIES["All Categories"]);
     const [selectedEmployment, setSelectedEmployment] = useState(CONFIG.EMPLOYMENT_TYPES["All Types"]);
@@ -106,9 +107,11 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         // 2. Select the job and pass data to the parent component
         const title = jobItem.job?.Title || 'Selected Job';
         const company = jobItem.company?.CompanyName || 'N/A';
-        const description = jobItem.job?.JobDescription || '';
+        // Corrected variable usage from 'item' to 'jobItem' (Fix from previous turn)
+        const description = jobItem.job?.JobDescription || ''; 
         
-        setJdText(description, title, company);
+        // This call updates selectedJdTitle in the parent component (App.jsx), triggering the screen change
+        setJdText(description, title, company); 
     };
 
     // Handler for the "Next Page" button
@@ -136,10 +139,28 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
 
     if (selectedJdTitle) {
         // Display the selected job confirmation
+        // MODIFIED BLOCK START: Now uses selectedCompany and fullJdText
+        
+        // Create a snippet using the full JD text passed from the parent
+        const snippet = fullJdText.substring(0, 200) + (fullJdText.length > 200 ? '...' : '');
+
         return (
             <div className="search-status-box selected">
                 <h3>✅ Job Selected</h3>
-                <p><strong>Job Title:</strong> {selectedJdTitle}</p>
+                
+                <div className="selected-job-details">
+                    <p><strong>Job Title:</strong> {selectedJdTitle}</p>
+                    <p><strong>Company:</strong> {selectedCompany}</p>
+                    <p>
+                        <strong>JD Snippet:</strong> 
+                        {/* Re-using dangerouslySetInnerHTML to render the formatted snippet */}
+                        <span 
+                            dangerouslySetInnerHTML={{ __html: snippet }} 
+                            style={{ display: 'block', marginTop: '5px' }}
+                        />
+                    </p>
+                </div>
+
                 <button 
                     onClick={() => {
                         setHighlightedJobIndex(null); // Clear highlight on deselect
@@ -151,6 +172,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
                 </button>
             </div>
         );
+        // MODIFIED BLOCK END
     }
 
     return (
@@ -219,7 +241,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
                                             <br />
                                             <span className="company-name">{item.company?.CompanyName || 'N/A'}</span>
                                         </td>
-                                        {/* FIX: Use dangerouslySetInnerHTML to render HTML formatted text */}
+                                        {/* Use dangerouslySetInnerHTML to render HTML formatted text */}
                                         <td 
                                             className="jd-snippet-cell"
                                             dangerouslySetInnerHTML={{ __html: jdSnippet }} 
