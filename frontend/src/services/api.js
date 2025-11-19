@@ -5,7 +5,9 @@ import axios from 'axios';
 // NOTE: Ensure this is the correct backend URL
 // For development: use localhost:8000
 // For production: use https://resume-smith-api.onrender.com
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000'; 
+const API_BASE = process.env.NODE_ENV === 'production'
+  ? 'https://resume-smith-api.onrender.com'
+  : 'http://localhost:8000'; 
 // External API for job search
 const JOBS_API_BASE = 'https://www.findsgjobs.com/apis/job/searchable';
 
