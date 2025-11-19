@@ -38,7 +38,6 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         // Clear error only when starting a fetch, not when loading more
         if (clearResults) { 
             setError(null);
-            setResults([]); // Clear immediately for visual feedback on new search
         }
 
         const params = {
@@ -71,7 +70,8 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
             
             setTotalResults(newTotal);
 
-            if (newTotal === 0 && clearResults) {
+            // FIX 1: Only set an error if the actual jobResults array is empty.
+            if (jobResults.length === 0 && clearResults) {
                  setError("No jobs found matching your criteria.");
             }
             
@@ -118,6 +118,9 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
     const hasMoreResults = results.length < totalResults;
     // Determine if we are loading the initial page (to show 'Searching...' on the main button)
     const isSearchingFirstPage = isInitialSearch && loading; 
+    
+    // FIX 2: Ensure the displayed total is never less than the number of jobs currently displayed
+    const displayTotalResults = Math.max(results.length, totalResults);
 
     if (selectedJdTitle) {
         // Display the selected job confirmation
@@ -172,7 +175,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
             
             {results.length > 0 && (
                 <div className="search-results">
-                    <h4>Showing {results.length} of {totalResults} Results:</h4>
+                    <h4>Showing {results.length} of {displayTotalResults} Results:</h4>
                     {results.map((item, index) => (
                         <div key={index} className="job-card">
                             <div className="job-details">
@@ -195,13 +198,13 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
                             disabled={loading && !isSearchingFirstPage} // Disable only when loading more
                             className="button load-more-button"
                         >
-                            {loading && !isSearchingFirstPage ? 'Loading More...' : `Load More Jobs (${totalResults - results.length} left)`}
+                            {loading && !isSearchingFirstPage ? 'Loading More...' : `Load More Jobs (${displayTotalResults - results.length} left)`}
                         </button>
                     )}
 
-                    {results.length === totalResults && totalResults > 0 && (
+                    {results.length === displayTotalResults && displayTotalResults > 0 && (
                         <div className="search-status-box all-loaded">
-                            <p>All {totalResults} results loaded.</p>
+                            <p>All {displayTotalResults} results loaded.</p>
                         </div>
                     )}
                 </div>
