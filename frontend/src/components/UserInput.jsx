@@ -1,55 +1,67 @@
-// /frontend/src/components/UserInput.jsx
+// frontend/src/components/UserInput.jsx
 
 import React from 'react';
+import './UserInput.css';
 
-const UserInput = ({ userAnswers, setUserAnswers, onGenerate, loading, analysis }) => {
-  if (!analysis) {
-    return null;
-  }
+// CRITICAL CHANGE: Added isJdSelected prop to control analysis button
+const UserInput = ({ 
+    resumeFile, 
+    setResumeFile, 
+    provider, 
+    setProvider, 
+    onAnalyze, 
+    loading, 
+    error,
+    isJdSelected // New prop
+}) => {
+  
+  // Helper to determine if analysis button should be enabled
+  const isAnalyzeDisabled = loading || !resumeFile || !isJdSelected;
 
   return (
-    <div style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', marginBottom: '20px' }}>
-      <h2>2. Provide Clarifications</h2>
-      <p style={{ marginBottom: '15px', color: '#666' }}>
-        Please answer the questions from the analysis above to help improve your resume.
-      </p>
-      
-      <div style={{ marginBottom: '15px' }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-          Your Answers:
-        </label>
-        <textarea
-          value={userAnswers}
-          onChange={(e) => setUserAnswers(e.target.value)}
-          placeholder="e.g., Q1: Yes, I used Docker and Kubernetes in a learning environment. Q2: No, only Python and SQL."
-          rows={6}
-          style={{
-            width: '100%',
-            padding: '10px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            fontFamily: 'inherit',
-            fontSize: '14px'
-          }}
-          disabled={loading}
+    <div className="user-input-container">
+      <h3>2. Upload Resume and Select LLM</h3>
+      <div className="input-group">
+        <label htmlFor="resume-upload">Upload Resume (PDF/DOCX):</label>
+        <input
+          id="resume-upload"
+          type="file"
+          accept=".pdf,.docx"
+          onChange={(e) => setResumeFile(e.target.files[0])}
         />
+        {resumeFile && <p className="file-status">✅ Resume: {resumeFile.name}</p>}
       </div>
 
-      <button
-        onClick={onGenerate}
-        disabled={!userAnswers.trim() || loading}
-        style={{
-          padding: '10px 20px',
-          backgroundColor: '#28a745',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: (!userAnswers.trim() || loading) ? 'not-allowed' : 'pointer',
-          opacity: (!userAnswers.trim() || loading) ? 0.6 : 1,
-        }}
-      >
-        {loading ? 'Generating...' : '✨ Generate Final Resume'}
-      </button>
+      {/* REMOVED: The Job Description file upload input section has been removed */}
+
+      <div className="input-group">
+        <label htmlFor="llm-select">Select LLM Provider:</label>
+        <select
+          id="llm-select"
+          value={provider}
+          onChange={(e) => setProvider(e.target.value)}
+        >
+          <option value="gemini">Gemini</option>
+          <option value="groq">Groq</option>
+        </select>
+      </div>
+
+      {error && <div className="error-message">{error}</div>}
+
+      <div className="action-area">
+        <button 
+          onClick={onAnalyze} 
+          disabled={isAnalyzeDisabled}
+          className="analyze-button"
+        >
+          {loading ? 'Analyzing...' : '🧠 Start Analysis (Part 1)'}
+        </button>
+      </div>
+      
+      {/* Display messages if JD is missing */}
+      {!isAnalyzeDisabled && !isJdSelected && (
+          <p className="status-message warning">Please select a job description in Step 1.</p>
+      )}
     </div>
   );
 };

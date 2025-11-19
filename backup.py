@@ -118,7 +118,7 @@ def generate_documentation(root_dirs):
     """Scans root directories and generates the required Markdown files."""
     
     # Directories to be ignored during the scan
-    EXCLUDED_DIRS = ['node_modules', '__pycache__', 'dist', 'build', '.vite', '.git', 'coverage', '.venv']
+    EXCLUDED_DIRS = ['node_modules', '__pycache__', 'dist', 'build', '.vite', '.git', 'coverage', '.venv', 'venv']
 
     # Store collected content, keyed by the root directory name
     collected_content = defaultdict(list)

@@ -1,157 +1,133 @@
-// /frontend/src/App.jsx
+// frontend/src/App.jsx
 
 import React, { useState } from 'react';
-import FileUpload from './components/FileUpload';
-import AnalysisResults from './components/AnalysisResults';
-import UserInput from './components/UserInput';
-import FinalResume from './components/FinalResume';
-import { analyzeResume, transformResume } from './services/api';
 import './App.css';
+import UserInput from './components/UserInput';
+import AnalysisResults from './components/AnalysisResults';
+import JobSearchAndSelect from './components/JobSearchAndSelect'; // NEW IMPORT
+import { analyzeResume, transformResume } from './services/api';
 
-function App() {
-  // State for the entire application flow
-  const [provider, setProvider] = useState('Gemini');
+const App = () => {
   const [resumeFile, setResumeFile] = useState(null);
-  const [jdFile, setJdFile] = useState(null);
-  const [analysis, setAnalysis] = useState(null);
-  const [resumeText, setResumeText] = useState('');
+  // Replaced jdFile state with jdText
   const [jdText, setJdText] = useState('');
-  const [userAnswers, setUserAnswers] = useState('');
-  const [finalResume, setFinalResume] = useState('');
-  const [loadingAnalysis, setLoadingAnalysis] = useState(false); // Separate state for Part 1
-  const [loadingTransformation, setLoadingTransformation] = useState(false); // Separate state for Part 2
-  const [error, setError] = useState('');
+  const [selectedJdTitle, setSelectedJdTitle] = useState(''); // To display selected job name
+  const [selectedCompany, setSelectedCompany] = useState(''); // Store company name for LLM prompt
+  const [provider, setProvider] = useState('gemini');
+  const [analysis, setAnalysis] = useState(null);
+  const [transformedResume, setTransformedResume] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // New setter function to handle text, title, and company
+  const handleSetJdText = (text, title, company) => {
+    setJdText(text);
+    setSelectedJdTitle(title);
+    setSelectedCompany(company || '');
+  };
+  
+  // New deselect function
+  const handleDeselect = () => {
+    setJdText('');
+    setSelectedJdTitle('');
+    setSelectedCompany('');
+  };
+
 
   const handleAnalyze = async () => {
-    if (!provider || !resumeFile || !jdFile) {
-      setError('Please select provider and upload both files');
+    setError(null);
+    setAnalysis(null);
+    setTransformedResume(null);
+
+    // CRITICAL CHANGE: Check for jdText instead of jdFile
+    if (!provider || !resumeFile || !jdText) {
+      setError('Please select an LLM, upload a resume, and select a Job Description.');
       return;
     }
 
-    setLoadingAnalysis(true); // Only set analysis loading
-    setError('');
-    setAnalysis(null);
-    setFinalResume('');
-
+    setLoading(true);
     try {
-      const result = await analyzeResume(provider, resumeFile, jdFile);
-      
-      if (result.status === 'success') {
-        setAnalysis(result.analysis);
-        setResumeText(result.resume_text);
-        setJdText(result.jd_text);
-      } else {
-        setError(result.detail || 'Analysis failed');
-      }
+      // CRITICAL CHANGE: Pass jdText string instead of jdFile object
+      const result = await analyzeResume(provider, resumeFile, jdText);
+      // Extract the analysis markdown from the response
+      setAnalysis({
+        part_1_analysis: result.part_1_analysis,
+        original_resume_text: result.original_resume_text,
+      });
     } catch (err) {
-      setError(err.response?.data?.detail || 'Network error. Please try again.');
-      console.error('Analysis error:', err);
+      setError(`Analysis failed: ${err.message}. Check the backend API.`);
     } finally {
-      setLoadingAnalysis(false); // Only clear analysis loading
+      setLoading(false);
     }
   };
 
-  const handleGenerate = async () => {
-    if (!userAnswers.trim()) {
-      setError('Please provide answers to the questions');
-      return;
-    }
-
-    setLoadingTransformation(true); // Only set transformation loading
-    setError('');
-
+  const handleTransform = async (userAnswers) => {
+    setLoading(true);
+    setError(null);
     try {
+      // The transformResume call includes jdText, job title, and company
       const result = await transformResume(
         provider,
-        resumeText,
+        analysis.original_resume_text,
         jdText,
-        analysis,
+        selectedJdTitle,
+        selectedCompany,
+        analysis.part_1_analysis,
         userAnswers
       );
-
-      if (result.status === 'success') {
-        setFinalResume(result.final_resume);
-      } else {
-        setError(result.detail || 'Transformation failed');
-      }
+      setTransformedResume(result.transformed_resume);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Network error. Please try again.');
-      console.error('Transformation error:', err);
+      setError(`Transformation failed: ${err.message}.`);
     } finally {
-      setLoadingTransformation(false); // Only clear transformation loading
+      setLoading(false);
     }
   };
 
   return (
     <div className="App">
-      <header style={{ 
-        backgroundColor: '#343a40', 
-        color: 'white', 
-        padding: '20px', 
-        textAlign: 'center',
-        marginBottom: '30px'
-      }}>
-        <h1>🧠 AI Resume Transformer</h1>
-        <p>Upload your resume and job description for AI-powered optimization</p>
+      <header className="App-header">
+        <h1>Resume Transformer ✨</h1>
       </header>
+      
+      <main className="App-main">
+        {/* Job Search & Select Component */}
+        <JobSearchAndSelect 
+            setJdText={handleSetJdText}
+            selectedJdTitle={selectedJdTitle}
+            onDeselect={handleDeselect}
+        />
 
-      <main style={{ maxWidth: '800px', margin: '0 auto', padding: '0 20px' }}>
-        {error && (
-          <div style={{
-            backgroundColor: '#f8d7da',
-            color: '#721c24',
-            padding: '10px',
-            borderRadius: '4px',
-            marginBottom: '20px',
-            border: '1px solid #f5c6cb'
-          }}>
-            {error}
-          </div>
-        )}
-
-        <FileUpload
-          provider={provider}
-          setProvider={setProvider}
+        <UserInput 
+          // Passed resumeFile and setResumeFile (NO CHANGE)
           resumeFile={resumeFile}
           setResumeFile={setResumeFile}
-          jdFile={jdFile}
-          setJdFile={setJdFile}
+          
+          // Removed jdFile related props
+          
+          // LLM Provider (NO CHANGE)
+          provider={provider}
+          setProvider={setProvider}
+          
+          // New requirement to check before allowing analysis
+          isJdSelected={!!jdText}
+          
           onAnalyze={handleAnalyze}
-          loading={loadingAnalysis || loadingTransformation} // Combined loading for file upload disable
+          loading={loading}
+          error={error}
         />
 
-        <AnalysisResults 
-          analysis={analysis} 
-          loading={loadingAnalysis} // Only show analysis loading
-        />
-
-        <UserInput
-          userAnswers={userAnswers}
-          setUserAnswers={setUserAnswers}
-          onGenerate={handleGenerate}
-          loading={loadingTransformation} // Only show transformation loading
+        <AnalysisResults
           analysis={analysis}
-        />
-
-        <FinalResume 
-          finalResume={finalResume} 
-          loading={loadingTransformation} // Only show transformation loading
+          transformedResume={transformedResume}
+          onTransform={handleTransform}
+          loading={loading}
         />
       </main>
-
-      <footer style={{ 
-        marginTop: '50px', 
-        padding: '20px', 
-        textAlign: 'center', 
-        color: '#666',
-        borderTop: '1px solid #ddd'
-      }}>
-        <p>Resume Transformer Tool - Powered by AI</p>
+      <footer>
+        <p>© 2025 Resume Transformer</p>
       </footer>
     </div>
   );
-}
+};
 
 export default App;
-
-// end_of_file

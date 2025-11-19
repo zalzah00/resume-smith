@@ -17,13 +17,15 @@ import os
 from core import (
     run_part_1_analysis, 
     run_part_2_transformation, 
-    docx_to_text,
+    extract_text_from_file, 
     CLIENT_AVAILABLE,
     FINAL_API_STATUS,
     logger
 )
 import tempfile
 import asyncio
+import httpx
+import json
 
 app = FastAPI(title="Resume Transformer API", version="1.0.0")
 
@@ -35,81 +37,141 @@ app.add_middleware(
         "https://resume-smith-front.onrender.com"
     ],
     allow_credentials=False,
-    allow_methods=["POST"],  # ← REMOVED GET & OPTIONS (we only need POST)
-    allow_headers=["Content-Type"],  # ← REMOVED Authorization (not needed)
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
+# Helper to determine extension
+def get_file_extension(filename):
+    return os.path.splitext(filename)[1].lower()
 
 @app.get("/")
 async def root():
-    return {
-        "message": "Resume Transformer API", 
-        "status": "Running",
-        "api_status": FINAL_API_STATUS
-    }
+    return {"message": "Resume Transformer API is running.", "status": FINAL_API_STATUS}
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "clients_available": CLIENT_AVAILABLE}
+
+# Temporary debug endpoint to test Groq responses directly (local dev only).
+@app.post("/api/debug-groq")
+async def debug_groq(model: str = Form(...), prompt: str = Form(...)):
+    """
+    Debug endpoint: sends `prompt` to the Groq client with the specified `model`.
+    Returns raw result (for debugging only). Do NOT enable in production.
+    """
+    from core import _generate_content_with_config
+    try:
+        # Force provider to 'groq'
+        result = _generate_content_with_config('groq', model, prompt)
+        return JSONResponse(content={"status": "ok", "result": result})
+    except Exception as e:
+        return JSONResponse(content={"status": "error", "detail": str(e)}, status_code=500)
+
+
+# NEW ENDPOINT: Job Search Proxy (to bypass CORS issues)
+@app.get("/api/search-jobs")
+async def search_jobs_proxy(
+    page: int = 1,
+    per_page_count: int = 5,
+    keywords: str = None,
+    JobCategory: int = None,
+    EmploymentType: int = None,
+    id_Job_NearestMRTStation: int = None
+):
+    """
+    Proxy endpoint for searching jobs from findsgjobs.com API.
+    Bypasses CORS restrictions on frontend.
+    """
+    try:
+        external_api_url = "https://www.findsgjobs.com/apis/job/searchable"
+        
+        # Build query parameters
+        params = {
+            "page": page,
+            "per_page_count": per_page_count,
+        }
+        
+        if keywords:
+            params["keywords"] = keywords
+        if JobCategory:
+            params["JobCategory"] = JobCategory
+        if EmploymentType:
+            params["EmploymentType"] = EmploymentType
+        if id_Job_NearestMRTStation:
+            params["id_Job_NearestMRTStation"] = id_Job_NearestMRTStation
+        
+        # Make request to external API using httpx
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(external_api_url, params=params)
+            response.raise_for_status()
+            return response.json()
+        
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Job search API timed out. Please try again.")
+    except httpx.RequestError as e:
+        logger.error(f"Job search API error: {e}")
+        raise HTTPException(status_code=502, detail="Failed to connect to job search API. Please try again.")
+    except Exception as e:
+        logger.error(f"Unexpected error in job search: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+
 
 @app.post("/api/analyze")
 async def analyze_resume(
     provider: str = Form(...),
     resume: UploadFile = File(...),
-    jd: UploadFile = File(...)
+    jd_text: str = Form(...) # <--- JD content is now a string from the frontend
 ):
-    """
-    Process resume and job description files for Part 1 analysis
-    """
     if not CLIENT_AVAILABLE:
-        raise HTTPException(status_code=500, detail="No LLM clients available. Check API keys.")
-    
-    if provider not in ["Gemini", "Groq"]:
-        raise HTTPException(status_code=400, detail="Provider must be 'Gemini' or 'Groq'")
-    
-    try:
-        # Save uploaded files temporarily and extract text
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as resume_temp:
-            resume_content = await resume.read()
-            resume_temp.write(resume_content)
-            resume_temp_path = resume_temp.name
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as jd_temp:
-            jd_content = await jd.read()
-            jd_temp.write(jd_content)
-            jd_temp_path = jd_temp.name
-        
-        # Extract text from DOCX files
-        resume_text = docx_to_text(resume_temp_path, "RESUME")
-        jd_text = docx_to_text(jd_temp_path, "JD")
-        
-        # Clean up temporary files
-        os.unlink(resume_temp_path)
-        os.unlink(jd_temp_path)
-        
-        # Check for extraction errors
-        if "ERROR" in resume_text:
-            raise HTTPException(status_code=400, detail=f"Resume file error: {resume_text}")
-        if "ERROR" in jd_text:
-            raise HTTPException(status_code=400, detail=f"Job description file error: {jd_text}")
-        
-        # Run Part 1 analysis
-        analysis_result = run_part_1_analysis(provider, resume_text, jd_text)
-        
-        if "ERROR" in analysis_result:
-            raise HTTPException(status_code=500, detail=analysis_result)
-        
-        return {
-            "status": "success",
-            "analysis": analysis_result,
-            "resume_text": resume_text,
-            "jd_text": jd_text
-        }
-        
-    except Exception as e:
-        logger.error(f"Error in analyze_resume: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
+        raise HTTPException(status_code=503, detail="LLM API client is not configured.")
 
+    if not resume:
+        raise HTTPException(status_code=400, detail="Resume file is required.")
+        
+    if not jd_text.strip(): # Check if the passed text is empty
+        raise HTTPException(status_code=400, detail="Job Description text is empty. Please select a job.")
+
+
+    temp_resume_path = None
+    try:
+        # --- 1. Extract Text from Resume File (REMAINS THE SAME) ---
+        extension = get_file_extension(resume.filename)
+        
+        # Save resume file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as tmp:
+            content = await resume.read()
+            tmp.write(content)
+            temp_resume_path = tmp.name
+        
+        resume_text = extract_text_from_file(temp_resume_path, extension)
+
+        if not resume_text:
+            raise HTTPException(status_code=400, detail="Could not extract text from resume file. Please check file format.")
+            
+        # --- 2. JD Text is already available (CRITICAL CHANGE) ---
+        # jd_text variable now holds the content, no file handling needed.
+        
+        # --- 3. Run Analysis (REMAINS THE SAME) ---
+        analysis_result = run_part_1_analysis(provider, resume_text, jd_text)
+
+        return JSONResponse(content={
+            "status": "success",
+            "part_1_analysis": analysis_result,
+            "original_resume_text": resume_text,
+            "job_description_text": jd_text # return the JD text for safety/debugging
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Analysis processing error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error during analysis: {e}")
+    finally:
+        if temp_resume_path and os.path.exists(temp_resume_path):
+            os.remove(temp_resume_path)
+
+
+# The /api/transform endpoint requires NO CHANGES as it already accepts 
+# 'jd_text' as a string form field.
 @app.post("/api/transform")
 async def transform_resume(
     provider: str = Form(...),
@@ -118,41 +180,29 @@ async def transform_resume(
     part_1_analysis: str = Form(...),
     user_answers: str = Form(...)
 ):
-    """
-    Generate final transformed resume based on user answers (Part 2)
-    """
+    # ... (rest of the /api/transform logic remains unchanged) ...
+    # This logic already correctly uses jd_text (string)
+    
     if not CLIENT_AVAILABLE:
-        raise HTTPException(status_code=500, detail="No LLM clients available. Check API keys.")
-    
-    if provider not in ["Gemini", "Groq"]:
-        raise HTTPException(status_code=400, detail="Provider must be 'Gemini' or 'Groq'")
-    
+        raise HTTPException(status_code=503, detail="LLM API client is not configured.")
+        
     try:
-        # Run Part 2 transformation
-        final_resume = run_part_2_transformation(
-            provider=provider,
-            resume_text=resume_text,
-            jd_text=jd_text,
-            part_1_analysis=part_1_analysis,
-            user_answers=user_answers
+        transformed_text = run_part_2_transformation(
+            provider, 
+            resume_text, 
+            jd_text, 
+            part_1_analysis, 
+            user_answers
         )
         
-        if "ERROR" in final_resume:
-            raise HTTPException(status_code=500, detail=final_resume)
-        
-        return {
+        return JSONResponse(content={
             "status": "success",
-            "final_resume": final_resume
-        }
+            "transformed_resume": transformed_text,
+        })
         
     except Exception as e:
-        logger.error(f"Error in transform_resume: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Transformation error: {str(e)}")
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
+        logger.error(f"Transformation processing error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error during transformation: {e}")
 # end_of_file
 ```
 
@@ -164,10 +214,13 @@ import os
 import logging
 import sys
 import docx2txt
+# Import PyMuPDF for PDF handling
+import fitz # PyMuPDF is imported as fitz
 from pathlib import Path
 from google import genai
 from google.genai import types
 from groq import Groq
+from groq import DefaultHttpxClient
 from dotenv import load_dotenv
 
 # --- Logging Setup ---
@@ -190,7 +243,7 @@ logger.info("Core application module loaded.")
 
 # --- Configuration ---
 GEMINI_MODEL = 'gemini-2.5-flash'
-GROQ_MODEL = 'llama-3.3-70b-versatile'
+GROQ_MODEL = 'openai/gpt-oss-20b'
 GEMINI_API_NAME = 'GEMINI_API_KEY'
 GROQ_API_NAME = 'GROQ_API_KEY'
 
@@ -220,11 +273,22 @@ except Exception as e:
 try:
     GROQ_API_KEY = os.environ.get(GROQ_API_NAME)
     if GROQ_API_KEY:
-        groq_client = Groq(api_key=GROQ_API_KEY)
-        API_STATUS.append(f"✅ Groq Client ({GROQ_MODEL}) ready.")
+        try:
+            groq_client = Groq(api_key=GROQ_API_KEY)
+            API_STATUS.append(f"✅ Groq Client ({GROQ_MODEL}) ready.")
+        except Exception as e:
+            # Try constructing with a DefaultHttpxClient to avoid handshake/proxy kw issues
+            logger.exception("Initial Groq client init failed, retrying with DefaultHttpxClient")
+            try:
+                groq_client = Groq(api_key=GROQ_API_KEY, http_client=DefaultHttpxClient())
+                API_STATUS.append(f"✅ Groq Client ({GROQ_MODEL}) ready (with DefaultHttpxClient).")
+            except Exception as e2:
+                logger.exception("Groq client initialization retry failed")
+                API_STATUS.append(f"❌ Groq Client Error: {e2}")
     else:
         API_STATUS.append("⚠️ Groq Client: Key missing in .env.")
 except Exception as e:
+    logger.exception("Unexpected error during Groq client initialization")
     API_STATUS.append(f"❌ Groq Client Error: {e}")
 
 CLIENT_AVAILABLE = gemini_client is not None or groq_client is not None
@@ -286,27 +350,69 @@ The final output must consist ONLY of the text of the transformed resume. Do not
 """
 
 # --- Utility Functions ---
-def docx_to_text(docx_file_path, doc_type):
-    """Extracts text content from a .docx file using docx2txt."""
-    if docx_file_path is None:
-        return ""
+def _extract_text_from_pdf(pdf_file_path):
+    """Extracts text content from a .pdf file using PyMuPDF."""
+    text = ""
     try:
-        text = docx2txt.process(docx_file_path)
-        text = '\n'.join([line.strip() for line in text.splitlines() if line.strip()])
-
-        logger.info(f"--- Extracted {doc_type} Text (First 500 chars) ---\n{text[:500]}...")
-        logger.debug(f"--- Full Extracted {doc_type} Text ---\n{text}")
+        doc = fitz.open(pdf_file_path)
+        for page in doc:
+            text += page.get_text()
+        doc.close()
         return text
     except Exception as e:
-        error_msg = f"ERROR: Could not read DOCX file ({doc_type}). Details: {e}"
-        logger.error(error_msg)
-        return error_msg
+        logger.error(f"ERROR: Could not read PDF file. Details: {e}")
+        return f"ERROR: Could not read PDF file. Details: {e}"
+
+def _extract_text_from_txt(txt_file_path):
+    """Reads text content from a .txt file."""
+    try:
+        with open(txt_file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        logger.error(f"ERROR: Could not read TXT file. Details: {e}")
+        return f"ERROR: Could not read TXT file. Details: {e}"
+
+def _extract_text_from_docx(docx_file_path):
+    """Extracts text content from a .docx file using docx2txt."""
+    try:
+        return docx2txt.process(docx_file_path)
+    except Exception as e:
+        logger.error(f"ERROR: Could not read DOCX file. Details: {e}")
+        return f"ERROR: Could not read DOCX file. Details: {e}"
+
+def extract_text_from_file(file_path, doc_type):
+    """Generic function to extract text based on file extension."""
+    if file_path is None:
+        return ""
+    
+    file_extension = Path(file_path).suffix.lower()
+    text = ""
+
+    if file_extension == '.docx':
+        text = _extract_text_from_docx(file_path)
+    elif file_extension == '.pdf':
+        text = _extract_text_from_pdf(file_path)
+    elif file_extension == '.txt':
+        text = _extract_text_from_txt(file_path)
+    else:
+        return f"ERROR: Unsupported file type: {file_extension}"
+
+    # Standard text cleaning (applies to all formats)
+    if not text.startswith("ERROR:"):
+        text = '\n'.join([line.strip() for line in text.splitlines() if line.strip()])
+
+    logger.info(f"--- Extracted {doc_type} Text ({file_extension}) (First 500 chars) ---\n{text[:500]}...")
+    logger.debug(f"--- Full Extracted {doc_type} Text ---\n{text}")
+    return text
 
 # --- Core LLM Functions ---
 def _generate_content_with_config(provider, model_name, prompt):
     """Internal function to call the LLM with system instruction config based on provider."""
     
-    if provider == 'Gemini' and gemini_client:
+    # Normalize provider name to title case
+    provider = provider.lower()
+    
+    if provider == 'gemini' and gemini_client:
         config = types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION)
         response = gemini_client.models.generate_content(
             model=model_name,
@@ -315,26 +421,69 @@ def _generate_content_with_config(provider, model_name, prompt):
         )
         return response.text
     
-    elif provider == 'Groq' and groq_client:
-        messages = [
-            {"role": "system", "content": SYSTEM_INSTRUCTION},
-            {"role": "user", "content": prompt}
-        ]
-        chat_completion = groq_client.chat.completions.create(
-            messages=messages,
-            model=model_name,
-        )
-        return chat_completion.choices[0].message.content
+    elif provider == 'groq' and groq_client:
+        try:
+            messages = [
+                {"role": "system", "content": SYSTEM_INSTRUCTION},
+                {"role": "user", "content": prompt}
+            ]
+            logger.info(f"Calling Groq chat/completions with model={model_name}")
+            chat_completion = groq_client.chat.completions.create(
+                messages=messages,
+                model=model_name,
+            )
+
+            # Log the raw response for debugging
+            try:
+                logger.debug(f"Raw Groq response: {chat_completion}")
+            except Exception:
+                logger.debug("Raw Groq response (could not string-format)")
+
+            # Handle multiple possible response shapes from Groq SDK
+            # 1) chat-style: choices[0].message.content
+            if hasattr(chat_completion, 'choices') and len(chat_completion.choices) > 0:
+                first = chat_completion.choices[0]
+                # chat-style
+                if hasattr(first, 'message') and hasattr(first.message, 'content'):
+                    return first.message.content
+                # text-style
+                if hasattr(first, 'text'):
+                    return first.text
+
+            # 2) dict-like responses
+            if isinstance(chat_completion, dict):
+                if 'choices' in chat_completion and len(chat_completion['choices']) > 0:
+                    ch0 = chat_completion['choices'][0]
+                    if isinstance(ch0, dict):
+                        if 'message' in ch0 and isinstance(ch0['message'], dict) and 'content' in ch0['message']:
+                            return ch0['message']['content']
+                        if 'text' in ch0:
+                            return ch0['text']
+
+            # 3) fallback: try to stringify the response and return any 'text' like field
+            for attr in ('text', 'content', 'data'):
+                if isinstance(chat_completion, dict) and attr in chat_completion:
+                    return chat_completion[attr]
+
+            # If we reach here, no usable content found
+            logger.warning('Groq response contained no usable content (empty choices).')
+            return ''
+        except Exception as e:
+            logger.error(f"Groq client error: {e}", exc_info=True)
+            raise
         
     else:
         raise ValueError(f"Provider '{provider}' not available or client not initialized.")
 
 def run_part_1_analysis(provider, resume_text, jd_text):
     """Calls the LLM to execute Phase 2 - Part 1 analysis."""
-    if (provider == 'Gemini' and not gemini_client) or (provider == 'Groq' and not groq_client):
+    # Normalize provider name to lowercase
+    provider = provider.lower()
+    
+    if (provider == 'gemini' and not gemini_client) or (provider == 'groq' and not groq_client):
         return f"ERROR: Selected {provider} client is not initialized. Check API keys."
 
-    model_name = GEMINI_MODEL if provider == 'Gemini' else GROQ_MODEL
+    model_name = GEMINI_MODEL if provider == 'gemini' else GROQ_MODEL
     
     prompt = f"""
     --- EXECUTE PHASE 2 — PART 1 ---
@@ -363,10 +512,13 @@ def run_part_1_analysis(provider, resume_text, jd_text):
 
 def run_part_2_transformation(provider, resume_text, jd_text, part_1_analysis, user_answers):
     """Calls the LLM to execute Phase 2 - Part 2 transformation."""
-    if (provider == 'Gemini' and not gemini_client) or (provider == 'Groq' and not groq_client):
+    # Normalize provider name to lowercase
+    provider = provider.lower()
+    
+    if (provider == 'gemini' and not gemini_client) or (provider == 'groq' and not groq_client):
         return f"ERROR: Selected {provider} client is not initialized. Check API keys."
     
-    model_name = GEMINI_MODEL if provider == 'Gemini' else GROQ_MODEL
+    model_name = GEMINI_MODEL if provider == 'gemini' else GROQ_MODEL
 
     prompt = f"""
     --- EXECUTE PHASE 2 — PART 2 ---
@@ -447,5 +599,7 @@ google-genai==0.3.0
 groq==0.9.0
 docx2txt==0.8
 python-multipart==0.0.6
+pymupdf
+httpx==0.28.1
 # end_of_file
 ```

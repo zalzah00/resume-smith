@@ -10,6 +10,7 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 from groq import Groq
+from groq import DefaultHttpxClient
 from dotenv import load_dotenv
 
 # --- Logging Setup ---
@@ -32,7 +33,7 @@ logger.info("Core application module loaded.")
 
 # --- Configuration ---
 GEMINI_MODEL = 'gemini-2.5-flash'
-GROQ_MODEL = 'llama-3.3-70b-versatile'
+GROQ_MODEL = 'openai/gpt-oss-20b'
 GEMINI_API_NAME = 'GEMINI_API_KEY'
 GROQ_API_NAME = 'GROQ_API_KEY'
 
@@ -62,11 +63,22 @@ except Exception as e:
 try:
     GROQ_API_KEY = os.environ.get(GROQ_API_NAME)
     if GROQ_API_KEY:
-        groq_client = Groq(api_key=GROQ_API_KEY)
-        API_STATUS.append(f"✅ Groq Client ({GROQ_MODEL}) ready.")
+        try:
+            groq_client = Groq(api_key=GROQ_API_KEY)
+            API_STATUS.append(f"✅ Groq Client ({GROQ_MODEL}) ready.")
+        except Exception as e:
+            # Try constructing with a DefaultHttpxClient to avoid handshake/proxy kw issues
+            logger.exception("Initial Groq client init failed, retrying with DefaultHttpxClient")
+            try:
+                groq_client = Groq(api_key=GROQ_API_KEY, http_client=DefaultHttpxClient())
+                API_STATUS.append(f"✅ Groq Client ({GROQ_MODEL}) ready (with DefaultHttpxClient).")
+            except Exception as e2:
+                logger.exception("Groq client initialization retry failed")
+                API_STATUS.append(f"❌ Groq Client Error: {e2}")
     else:
         API_STATUS.append("⚠️ Groq Client: Key missing in .env.")
 except Exception as e:
+    logger.exception("Unexpected error during Groq client initialization")
     API_STATUS.append(f"❌ Groq Client Error: {e}")
 
 CLIENT_AVAILABLE = gemini_client is not None or groq_client is not None
@@ -187,7 +199,10 @@ def extract_text_from_file(file_path, doc_type):
 def _generate_content_with_config(provider, model_name, prompt):
     """Internal function to call the LLM with system instruction config based on provider."""
     
-    if provider == 'Gemini' and gemini_client:
+    # Normalize provider name to title case
+    provider = provider.lower()
+    
+    if provider == 'gemini' and gemini_client:
         config = types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION)
         response = gemini_client.models.generate_content(
             model=model_name,
@@ -196,26 +211,69 @@ def _generate_content_with_config(provider, model_name, prompt):
         )
         return response.text
     
-    elif provider == 'Groq' and groq_client:
-        messages = [
-            {"role": "system", "content": SYSTEM_INSTRUCTION},
-            {"role": "user", "content": prompt}
-        ]
-        chat_completion = groq_client.chat.completions.create(
-            messages=messages,
-            model=model_name,
-        )
-        return chat_completion.choices[0].message.content
+    elif provider == 'groq' and groq_client:
+        try:
+            messages = [
+                {"role": "system", "content": SYSTEM_INSTRUCTION},
+                {"role": "user", "content": prompt}
+            ]
+            logger.info(f"Calling Groq chat/completions with model={model_name}")
+            chat_completion = groq_client.chat.completions.create(
+                messages=messages,
+                model=model_name,
+            )
+
+            # Log the raw response for debugging
+            try:
+                logger.debug(f"Raw Groq response: {chat_completion}")
+            except Exception:
+                logger.debug("Raw Groq response (could not string-format)")
+
+            # Handle multiple possible response shapes from Groq SDK
+            # 1) chat-style: choices[0].message.content
+            if hasattr(chat_completion, 'choices') and len(chat_completion.choices) > 0:
+                first = chat_completion.choices[0]
+                # chat-style
+                if hasattr(first, 'message') and hasattr(first.message, 'content'):
+                    return first.message.content
+                # text-style
+                if hasattr(first, 'text'):
+                    return first.text
+
+            # 2) dict-like responses
+            if isinstance(chat_completion, dict):
+                if 'choices' in chat_completion and len(chat_completion['choices']) > 0:
+                    ch0 = chat_completion['choices'][0]
+                    if isinstance(ch0, dict):
+                        if 'message' in ch0 and isinstance(ch0['message'], dict) and 'content' in ch0['message']:
+                            return ch0['message']['content']
+                        if 'text' in ch0:
+                            return ch0['text']
+
+            # 3) fallback: try to stringify the response and return any 'text' like field
+            for attr in ('text', 'content', 'data'):
+                if isinstance(chat_completion, dict) and attr in chat_completion:
+                    return chat_completion[attr]
+
+            # If we reach here, no usable content found
+            logger.warning('Groq response contained no usable content (empty choices).')
+            return ''
+        except Exception as e:
+            logger.error(f"Groq client error: {e}", exc_info=True)
+            raise
         
     else:
         raise ValueError(f"Provider '{provider}' not available or client not initialized.")
 
 def run_part_1_analysis(provider, resume_text, jd_text):
     """Calls the LLM to execute Phase 2 - Part 1 analysis."""
-    if (provider == 'Gemini' and not gemini_client) or (provider == 'Groq' and not groq_client):
+    # Normalize provider name to lowercase
+    provider = provider.lower()
+    
+    if (provider == 'gemini' and not gemini_client) or (provider == 'groq' and not groq_client):
         return f"ERROR: Selected {provider} client is not initialized. Check API keys."
 
-    model_name = GEMINI_MODEL if provider == 'Gemini' else GROQ_MODEL
+    model_name = GEMINI_MODEL if provider == 'gemini' else GROQ_MODEL
     
     prompt = f"""
     --- EXECUTE PHASE 2 — PART 1 ---
@@ -242,16 +300,29 @@ def run_part_1_analysis(provider, resume_text, jd_text):
         logger.error(error_msg)
         return error_msg
 
-def run_part_2_transformation(provider, resume_text, jd_text, part_1_analysis, user_answers):
+def run_part_2_transformation(provider, resume_text, jd_text, job_title, company, part_1_analysis, user_answers):
     """Calls the LLM to execute Phase 2 - Part 2 transformation."""
-    if (provider == 'Gemini' and not gemini_client) or (provider == 'Groq' and not groq_client):
+    # Normalize provider name to lowercase
+    provider = provider.lower()
+    
+    if (provider == 'gemini' and not gemini_client) or (provider == 'groq' and not groq_client):
         return f"ERROR: Selected {provider} client is not initialized. Check API keys."
     
-    model_name = GEMINI_MODEL if provider == 'Gemini' else GROQ_MODEL
+    model_name = GEMINI_MODEL if provider == 'gemini' else GROQ_MODEL
+
+    # Add job title and company to the prompt if they exist
+    job_context = ""
+    if job_title:
+        job_context += f"[TARGET JOB TITLE START]\n{job_title}\n[TARGET JOB TITLE END]\n"
+    if company:
+        job_context += f"[TARGET COMPANY START]\n{company}\n[TARGET COMPANY END]\n"
+
 
     prompt = f"""
     --- EXECUTE PHASE 2 — PART 2 ---
     Perform the full resume transformation and output the final draft ONLY.
+
+    {job_context}
 
     [JOB DESCRIPTION START]
     {jd_text}

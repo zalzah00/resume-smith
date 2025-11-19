@@ -1,0 +1,233 @@
+/* UserInput.css */
+
+:root {
+  --primary-color: #1e3a8a;
+  --primary-light: #3b82f6;
+  --primary-dark: #1e40af;
+  --success-color: #16a34a;
+  --danger-color: #dc2626;
+  --warning-color: #ea580c;
+  --neutral-50: #f9fafb;
+  --neutral-100: #f3f4f6;
+  --neutral-200: #e5e7eb;
+  --neutral-300: #d1d5db;
+  --neutral-600: #4b5563;
+  --neutral-700: #374151;
+  --neutral-900: #111827;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.user-input-container {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-md);
+}
+
+.user-input-container h3 {
+  margin: 0 0 20px 0;
+  color: var(--neutral-900);
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.input-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--neutral-700);
+}
+
+.file-input-wrapper {
+  position: relative;
+}
+
+.file-input-wrapper input[type="file"] {
+  display: none;
+}
+
+.file-input-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px; /* slightly reduced padding for tighter spacing */
+  border: 2px dashed var(--neutral-300);
+  border-radius: 8px;
+  background-color: var(--neutral-50);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  font-size: 0.9rem; /* slightly smaller label text */
+  font-weight: 500;
+  color: var(--neutral-700);
+  font-family: inherit;
+}
+
+.file-input-label:hover {
+  border-color: var(--primary-light);
+  background-color: rgba(59, 130, 246, 0.05);
+  color: var(--primary-light);
+}
+
+.file-input-label svg {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+}
+
+.file-selected {
+  padding: 12px 16px;
+  background-color: rgba(22, 163, 74, 0.1);
+  border: 1px solid var(--success-color);
+  border-radius: 6px;
+  color: var(--success-color);
+  font-size: 0.875rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.file-selected svg {
+  width: 16px;
+  height: 16px;
+}
+
+.remove-file-button {
+  background: none;
+  border: none;
+  color: var(--success-color);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease;
+}
+
+.remove-file-button:hover {
+  transform: scale(1.1);
+}
+
+.form-group select {
+  padding: 10px 12px;
+  border: 1px solid var(--neutral-300);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-start;
+}
+
+.analyze-button {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px; /* reduced padding for more compact buttons */
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: var(--shadow-md);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.analyze-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.analyze-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.analyze-button.loading {
+  position: relative;
+  color: transparent;
+}
+
+.analyze-button.loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 50%;
+  left: 50%;
+  margin-left: -8px;
+  margin-top: -8px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-message {
+  padding: 12px 16px;
+  background-color: rgba(220, 38, 38, 0.1);
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+  font-size: 0.875rem;
+  margin-bottom: 12px;
+}
+
+.success-message {
+  padding: 12px 16px;
+  background-color: rgba(22, 163, 74, 0.1);
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  color: #15803d;
+  font-size: 0.875rem;
+  margin-bottom: 12px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .user-input-container {
+    padding: 16px;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .analyze-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
