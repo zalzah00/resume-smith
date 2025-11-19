@@ -2,32 +2,10 @@
 
 import React, { useState } from 'react';
 import { searchJobs } from '../services/api';
+import CONFIG from '../config/jobConfig'; // <--- Configuration is now imported!
 import './JobSearchAndSelect.css';
 
-// --- CONFIGURATION (Extracted from job_search_app.py) ---
-// This should match the CONFIG from your job_search_app.py
-const CONFIG = {
-    "JOB_CATEGORIES": {
-        "All Categories": null,
-        "Information Technology": 1861,
-        "F&B (Food & Beverage)": 1855,
-        "Sales / Retail": 1875,
-        // ... (Add the rest of your categories here)
-    },
-    "EMPLOYMENT_TYPES": {
-        "All Types": null,
-        "Full Time": 76,
-        "Part Time": 115,
-        "Contract": 121,
-        // ... (Add the rest of your employment types here)
-    },
-    "MRT_STATIONS": {
-        "All Stations": null,
-        "Woodlands (NS9/TE2)": 1833,
-        "Jurong East (EW24/NS1)": 1840,
-        // ... (Add the rest of your MRT stations here)
-    },
-};
+// The CONFIG object is no longer hardcoded here.
 
 // Helper function to get the display name for a code (for status message)
 const getDisplayName = (code, configKey) => {
@@ -39,6 +17,7 @@ const getDisplayName = (code, configKey) => {
 };
 
 const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
+    // Initial state uses the imported CONFIG
     const [keyword, setKeyword] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(CONFIG.JOB_CATEGORIES["All Categories"]);
     const [selectedEmployment, setSelectedEmployment] = useState(CONFIG.EMPLOYMENT_TYPES["All Types"]);
@@ -73,7 +52,15 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
             console.log('Extracted job results:', jobResults);
             
             if (jobResults.length === 0) {
-                setError("No jobs found matching your criteria.");
+                // Also display the search parameters for context
+                const searchCriteria = [
+                    keyword.trim() ? `Keyword: ${keyword.trim()}` : '',
+                    selectedCategory ? `Category: ${getDisplayName(selectedCategory, 'JOB_CATEGORIES')}` : '',
+                    selectedEmployment ? `Type: ${getDisplayName(selectedEmployment, 'EMPLOYMENT_TYPES')}` : '',
+                    selectedMRT ? `MRT: ${getDisplayName(selectedMRT, 'MRT_STATIONS')}` : '',
+                ].filter(Boolean).join(', ');
+                
+                setError(`No jobs found matching your criteria: ${searchCriteria || 'All'}.`);
             }
             setResults(jobResults);
         } catch (err) {
@@ -122,6 +109,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
                     className="keyword-input"
                 />
                 <div className="select-group">
+                    {/* Select dropdowns now use the imported CONFIG */}
                     <select value={selectedCategory || ''} onChange={(e) => setSelectedCategory(e.target.value ? parseInt(e.target.value) : null)}>
                         {Object.entries(CONFIG.JOB_CATEGORIES).map(([name, code]) => (
                             <option key={name} value={code || ''}>{name}</option>
