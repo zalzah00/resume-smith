@@ -105,68 +105,26 @@ async def search_jobs_proxy(
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 
-# --------------------------------------------------------------------------------------
-# MODIFIED ENDPOINT: /api/analyze to accept EITHER jd_file or jd_text
-# --------------------------------------------------------------------------------------
+
 @app.post("/api/analyze")
 async def analyze_resume(
     provider: str = Form(...),
     resume: UploadFile = File(...),
-    jd_file: UploadFile = File(None), # NEW: Optional Job Description file upload
-    jd_text: str = Form(None)        # MODIFIED: Existing JD text is now optional
+    jd_text: str = Form(...) # <--- JD content is now a string from the frontend
 ):
-    final_jd_text = ""
-    temp_resume_path = None
-    temp_jd_path = None # Must be initialized here for the finally block
-    
-    # 1. Input Validation and JD Source Selection
     if not CLIENT_AVAILABLE:
         raise HTTPException(status_code=503, detail="LLM API client is not configured.")
 
     if not resume:
         raise HTTPException(status_code=400, detail="Resume file is required.")
-
-    # Check for mutual exclusivity and presence
-    is_file_provided = jd_file and jd_file.filename and jd_file.size > 0
-    is_text_provided = jd_text and jd_text.strip()
-    
-    if is_file_provided and is_text_provided:
-        # Should be prevented by frontend, but safeguard here
-        raise HTTPException(status_code=400, detail="Only one Job Description source (file OR text) can be provided.")
-
-    if not is_file_provided and not is_text_provided:
-        raise HTTPException(status_code=400, detail="Job Description is required. Please upload a file or select a job.")
-
-    if is_file_provided:
-        # --- Handle JD File Upload ---
-        logger.info(f"Processing uploaded JD file: {jd_file.filename}")
-        try:
-            # Save JD file temporarily
-            _, temp_jd_path = tempfile.mkstemp(suffix=get_file_extension(jd_file.filename))
-            # Read and write content
-            async with asyncio.to_thread(open, temp_jd_path, "wb") as buffer:
-                buffer.write(await jd_file.read())
-            
-            # Extract text
-            # Use jd_file.filename to determine the extension for the extractor
-            final_jd_text = extract_text_from_file(temp_jd_path, jd_file.filename) 
-            if not final_jd_text.strip():
-                 raise HTTPException(status_code=400, detail="Could not extract text from the uploaded Job Description file.")
-        except HTTPException:
-            # Re-raise explicit HTTP exceptions (like 400 from above check)
-            raise
-        except Exception as e:
-            logger.error(f"Error processing JD file: {e}", exc_info=True)
-            # Re-raise as a clean 400 error for file processing issues
-            raise HTTPException(status_code=400, detail=f"Failed to process JD file: {type(e).__name__} - {e}")
-            
-    elif is_text_provided:
-        # --- Handle JD Text from Search/Select ---
-        final_jd_text = jd_text.strip()
+        
+    if not jd_text.strip(): # Check if the passed text is empty
+        raise HTTPException(status_code=400, detail="Job Description text is empty. Please select a job.")
 
 
+    temp_resume_path = None
     try:
-        # --- 2. Extract Text from Resume File (EXISTING LOGIC) ---
+        # --- 1. Extract Text from Resume File (REMAINS THE SAME) ---
         extension = get_file_extension(resume.filename)
         
         # Save resume file temporarily
@@ -180,29 +138,27 @@ async def analyze_resume(
         if not resume_text:
             raise HTTPException(status_code=400, detail="Could not extract text from resume file. Please check file format.")
             
-        # --- 3. Run Analysis (EXISTING LOGIC) ---
-        # Pass the consolidated JD text
-        analysis_result = run_part_1_analysis(provider, resume_text, final_jd_text)
+        # --- 2. JD Text is already available (CRITICAL CHANGE) ---
+        # jd_text variable now holds the content, no file handling needed.
+        
+        # --- 3. Run Analysis (REMAINS THE SAME) ---
+        analysis_result = run_part_1_analysis(provider, resume_text, jd_text)
 
         return JSONResponse(content={
             "status": "success",
             "part_1_analysis": analysis_result,
             "original_resume_text": resume_text,
-            "job_description_text": final_jd_text # return the consolidated JD text
+            "job_description_text": jd_text # return the JD text for safety/debugging
         })
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Analysis processing error: {e}", exc_info=True)
-        # Handle generic server error
         raise HTTPException(status_code=500, detail=f"Internal server error during analysis: {e}")
     finally:
-        # Cleanup temporary files for both resume and JD
         if temp_resume_path and os.path.exists(temp_resume_path):
             os.remove(temp_resume_path)
-        if temp_jd_path and os.path.exists(temp_jd_path):
-            os.remove(temp_jd_path)
 
 
 # The /api/transform endpoint now includes job_title and company parameters

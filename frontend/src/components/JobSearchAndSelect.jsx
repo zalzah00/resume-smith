@@ -5,9 +5,6 @@ import { searchJobs } from '../services/api';
 import CONFIG from '../config/jobConfig'; 
 import './JobSearchAndSelect.css';
 
-// Allowed extensions for JD file upload
-const ALLOWED_JD_EXTENSIONS = ['.pdf', '.docx', '.txt'];
-
 // Helper function to get the display name for a code (for status message)
 const getDisplayName = (code, configKey) => {
     const map = CONFIG[configKey];
@@ -19,8 +16,8 @@ const getDisplayName = (code, configKey) => {
 
 const PER_PAGE_COUNT = 5; // Define the fixed number of results per page
 
-// CRITICAL CHANGE: Updated props to include jdFile and setJdFile
-const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJdText, onDeselect, jdFile, setJdFile }) => {
+// ACCEPTING new props: selectedCompany and fullJdText
+const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJdText, onDeselect }) => {
     const [keyword, setKeyword] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(CONFIG.JOB_CATEGORIES["All Categories"]);
     const [selectedEmployment, setSelectedEmployment] = useState(CONFIG.EMPLOYMENT_TYPES["All Types"]);
@@ -30,6 +27,8 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
     const [results, setResults] = useState([]);
     const [currentPage, setCurrentPage] = useState(1); 
     const [totalResults, setTotalResults] = useState(0); 
+    
+    // Tracks how many items were returned in the last API call.
     const [lastFetchedCount, setLastFetchedCount] = useState(0); 
     
     // V2: State for row selection
@@ -39,41 +38,9 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     
-    // Derived State for Mutual Exclusivity
-    const isFileSelected = !!jdFile;
-    const isSearchSelected = !!selectedJdTitle;
-    
-    // Logic: If a file is selected, search is disabled. If search is selected, file upload is disabled.
-    const isSearchDisabled = isFileSelected;
-    const isFileUploadDisabled = isSearchSelected;
 
-
-    // NEW: Handler for JD file upload to ensure mutual exclusivity is maintained
-    const handleJdFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const extension = '.' + file.name.split('.').pop().toLowerCase();
-            if (ALLOWED_JD_EXTENSIONS.includes(extension)) {
-                 // setJdFile is the handler from App.jsx, which clears the search JD text
-                setJdFile(file);
-                // Clear search results and error messages
-                setResults([]); 
-                setError(null);
-            } else {
-                alert(`Please upload a file with one of the following extensions for the JD: ${ALLOWED_JD_EXTENSIONS.join(', ')}`);
-                setJdFile(null);
-                e.target.value = ''; // Clear the input
-            }
-        } else {
-            setJdFile(null);
-        }
-    };
-    
     // Function to handle the actual API call
     const fetchJobs = async (pageToFetch) => { 
-        // Prevent fetching if a file is already uploaded
-        if (isFileSelected) return;
-
         setLoading(true);
         setError(null);
 
@@ -88,21 +55,26 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
         if (keyword.trim()) params.keywords = keyword.trim();
 
         try {
+            console.log('Searching with params:', params);
             const data = await searchJobs(params);
             
             const jobResults = data?.data?.result || [];
             const newTotal = data?.data?.total_records || 0;
 
+            // TRADITIONAL PAGINATION: Always REPLACE results, never append.
             setResults(jobResults);
             
+            // V2: Reset highlight when loading new page
             setHighlightedJobIndex(null); 
 
+            // Update successful fetch states
             setCurrentPage(pageToFetch); 
             setTotalResults(newTotal);
             setLastFetchedCount(jobResults.length); 
             
+            // Only set an error if the actual jobResults array is empty.
             if (jobResults.length === 0 && pageToFetch === 1) {
-                setError("No jobs found matching your criteria.");
+                 setError("No jobs found matching your criteria.");
             }
             
         } catch (err) {
@@ -118,31 +90,27 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
     const handleSearch = async (e) => {
         e.preventDefault();
         
-        // Prevent searching if a JD file is uploaded
-        if (isFileSelected) return;
-        
-        // Clear previous state
         setResults([]); 
         setTotalResults(0);
         setLastFetchedCount(0);
         setCurrentPage(1); 
         setIsInitialSearch(true); 
-        setError(null);
         
         await fetchJobs(1); // Fetch page 1
     };
 
     // V2: HANDLER for clicking a table row to select and highlight
     const handleRowClick = (jobItem, index) => {
-        // Prevent selection if a JD file is uploaded
-        if (isFileSelected) return;
-
+        // 1. Highlight the row
         setHighlightedJobIndex(index); 
 
+        // 2. Select the job and pass data to the parent component
         const title = jobItem.job?.Title || 'Selected Job';
         const company = jobItem.company?.CompanyName || 'N/A';
+        // Corrected variable usage from 'item' to 'jobItem' (Fix from previous turn)
         const description = jobItem.job?.JobDescription || ''; 
         
+        // This call updates selectedJdTitle in the parent component (App.jsx), triggering the screen change
         setJdText(description, title, company); 
     };
 
@@ -169,21 +137,23 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
     const endRange = startRange > 0 ? startRange + results.length - 1 : 0;
 
 
-    // --- RENDERING LOGIC ---
-
-    // Case 1: Job selected from search (Text JD is present)
-    if (isSearchSelected) {
+    if (selectedJdTitle) {
+        // Display the selected job confirmation
+        // MODIFIED BLOCK START: Now uses selectedCompany and fullJdText
+        
+        // Create a snippet using the full JD text passed from the parent
         const snippet = fullJdText.substring(0, 200) + (fullJdText.length > 200 ? '...' : '');
 
         return (
             <div className="search-status-box selected">
-                <h3>✅ Job Description Selected (via Search)</h3>
+                <h3>✅ Job Selected</h3>
                 
                 <div className="selected-job-details">
                     <p><strong>Job Title:</strong> {selectedJdTitle}</p>
                     <p><strong>Company:</strong> {selectedCompany}</p>
                     <p>
                         <strong>JD Snippet:</strong> 
+                        {/* Re-using dangerouslySetInnerHTML to render the formatted snippet */}
                         <span 
                             dangerouslySetInnerHTML={{ __html: snippet }} 
                             style={{ display: 'block', marginTop: '5px' }}
@@ -194,7 +164,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
                 <button 
                     onClick={() => {
                         setHighlightedJobIndex(null); // Clear highlight on deselect
-                        onDeselect(); // Clear parent selection (App.jsx)
+                        onDeselect(); // Clear parent selection
                     }} 
                     className="button deselect"
                 >
@@ -202,177 +172,114 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
                 </button>
             </div>
         );
-    }
-    
-    // Case 2: JD File is selected (Show file confirmation and clear button)
-    if (isFileSelected) {
-        return (
-            <div className="search-status-box selected file-selected">
-                <h3>✅ Job Description Selected (via File)</h3>
-                
-                <div className="selected-job-details">
-                    <p><strong>File Name:</strong> {jdFile.name}</p>
-                    <p className="status-message warning">
-                        Job Search is **disabled**. Clear the file below to use the search functionality.
-                    </p>
-                </div>
-
-                <button 
-                    onClick={() => {
-                        setJdFile(null); // Clear file state (calls handleSetJdFile in App.jsx)
-                    }} 
-                    className="button deselect"
-                >
-                    Change/Remove File
-                </button>
-            </div>
-        );
+        // MODIFIED BLOCK END
     }
 
-    
-    // Case 3: No job selected and no file uploaded (Show search interface and file upload)
     return (
         <div className="job-search-container">
-            <h3>1. Provide Job Description Source</h3>
-            
-            {/* --- Option A: JD Search Form --- */}
-            <div className="search-section" style={{ opacity: isSearchDisabled ? 0.6 : 1, pointerEvents: isSearchDisabled ? 'none' : 'auto' }}>
-                <h4>Option A: Search and Select (Click Row to Select)</h4>
-                <form onSubmit={handleSearch} className="search-form">
-                    <input
-                        type="text"
-                        placeholder="Search keywords (e.g., modeller, data scientist)"
-                        value={keyword}
-                        onChange={(e) => setKeyword(e.target.value)}
-                        className="keyword-input"
-                        disabled={isSearchDisabled}
-                    />
-                    <div className="select-group">
-                        <select 
-                            value={selectedCategory || ''} 
-                            onChange={(e) => setSelectedCategory(e.target.value ? parseInt(e.target.value) : null)} 
-                            disabled={isSearchDisabled}
-                        >
-                            {Object.entries(CONFIG.JOB_CATEGORIES).map(([name, code]) => (
-                                <option key={name} value={code || ''}>{name}</option>
-                            ))}
-                        </select>
-                        <select 
-                            value={selectedEmployment || ''} 
-                            onChange={(e) => setSelectedEmployment(e.target.value ? parseInt(e.target.value) : null)}
-                            disabled={isSearchDisabled}
-                        >
-                            {Object.entries(CONFIG.EMPLOYMENT_TYPES).map(([name, code]) => (
-                                <option key={name} value={code || ''}>{name}</option>
-                            ))}
-                        </select>
-                        <select 
-                            value={selectedMRT || ''} 
-                            onChange={(e) => setSelectedMRT(e.target.value ? parseInt(e.target.value) : null)}
-                            disabled={isSearchDisabled}
-                        >
-                            {Object.entries(CONFIG.MRT_STATIONS).map(([name, code]) => (
-                                <option key={name} value={code || ''}>{name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <button type="submit" disabled={isSearchDisabled || (loading && isSearchingFirstPage)} className="search-button">
-                        {loading && isSearchingFirstPage ? 'Searching...' : '🔍 Search Jobs'}
-                    </button>
-                </form>
-
-                {error && <div className="error-message">{error}</div>}
-                
-                {/* --- Search Results Table --- */}
-                {results.length > 0 && (
-                    <div className="search-results">
-                        <h4>
-                            Showing {startRange}-{endRange} of {displayTotalResults === results.length && !hasNextPage ? results.length : 'many'} Results:
-                        </h4>
-
-                        <table className="job-results-table">
-                            <thead>
-                                <tr>
-                                    <th style={{width: '30%'}}>Job Title / Company</th>
-                                    <th style={{width: '70%'}}>Job Description Snippet</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {results.map((item, index) => {
-                                    const jdText = item.job?.JobDescription || 'No description provided.';
-                                    const jdSnippet = jdText.substring(0, 200) + (jdText.length > 200 ? '...' : '');
-
-                                    return (
-                                        <tr 
-                                            key={index} 
-                                            className={index === highlightedJobIndex ? 'selected-row' : ''}
-                                            onClick={() => handleRowClick(item, index)} 
-                                        >
-                                            <td>
-                                                <strong>{item.job?.Title || 'N/A'}</strong>
-                                                <br />
-                                                <span className="company-name">{item.company?.CompanyName || 'N/A'}</span>
-                                            </td>
-                                            <td 
-                                                className="jd-snippet-cell"
-                                                dangerouslySetInnerHTML={{ __html: jdSnippet }} 
-                                            />
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                        
-                        {/* Pagination Controls */}
-                        <div className="pagination-controls">
-                            <button 
-                                onClick={handlePrevPage} 
-                                disabled={loading || !hasPrevPage} 
-                                className="button prev-button"
-                            >
-                                {'< Previous Page'}
-                            </button>
-                            <span className="page-status">
-                                Page {currentPage}
-                            </span>
-                            <button 
-                                onClick={handleNextPage} 
-                                disabled={loading || !hasNextPage} 
-                                className="button next-button"
-                            >
-                                {loading && !isSearchingFirstPage ? 'Loading...' : 'Next Page >'}
-                            </button>
-                        </div>
-
-                        {!hasNextPage && results.length > 0 && (
-                            <div className="search-status-box all-loaded">
-                                <p>All visible results loaded.</p>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-            
-            {/* --- Option B: JD File Upload --- */}
-            <div className="input-group jd-upload-group" style={{ marginTop: '25px' }}>
-                <h4>Option B: Upload a File</h4>
-                <label htmlFor="jd-upload">
-                    Upload Job Description ({ALLOWED_JD_EXTENSIONS.join(', ')}):
-                </label>
+            <h3>1. Search for a Job Description (Click Row to Select)</h3>
+            <form onSubmit={handleSearch} className="search-form">
                 <input
-                    id="jd-upload"
-                    type="file"
-                    accept={ALLOWED_JD_EXTENSIONS.join(',')}
-                    onChange={handleJdFileChange}
-                    disabled={isFileUploadDisabled}
+                    type="text"
+                    placeholder="Search keywords (e.g., modeller, data scientist)"
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                    className="keyword-input"
                 />
-                
-                {isFileUploadDisabled && (
-                    <p className="status-message warning">
-                        ❌ File upload is disabled because **"{selectedJdTitle}"** is currently selected via search. Clear the job selection above to upload a file.
-                    </p>
-                )}
-            </div>
+                <div className="select-group">
+                    <select value={selectedCategory || ''} onChange={(e) => setSelectedCategory(e.target.value ? parseInt(e.target.value) : null)}>
+                        {Object.entries(CONFIG.JOB_CATEGORIES).map(([name, code]) => (
+                            <option key={name} value={code || ''}>{name}</option>
+                        ))}
+                    </select>
+                    <select value={selectedEmployment || ''} onChange={(e) => setSelectedEmployment(e.target.value ? parseInt(e.target.value) : null)}>
+                        {Object.entries(CONFIG.EMPLOYMENT_TYPES).map(([name, code]) => (
+                            <option key={name} value={code || ''}>{name}</option>
+                        ))}
+                    </select>
+                    <select value={selectedMRT || ''} onChange={(e) => setSelectedMRT(e.target.value ? parseInt(e.target.value) : null)}>
+                        {Object.entries(CONFIG.MRT_STATIONS).map(([name, code]) => (
+                            <option key={name} value={code || ''}>{name}</option>
+                        ))}
+                    </select>
+                </div>
+                <button type="submit" disabled={loading && isSearchingFirstPage} className="search-button">
+                    {loading && isSearchingFirstPage ? 'Searching...' : '🔍 Search Jobs'}
+                </button>
+            </form>
+
+            {error && <div className="error-message">{error}</div>}
+            
+            {results.length > 0 && (
+                <div className="search-results">
+                    <h4>
+                        Showing {startRange}-{endRange} of {displayTotalResults === results.length && !hasNextPage ? results.length : 'many'} Results:
+                    </h4>
+
+                    {/* V2: Tabular Display */}
+                    <table className="job-results-table">
+                        <thead>
+                            <tr>
+                                <th style={{width: '30%'}}>Job Title / Company</th>
+                                <th style={{width: '70%'}}>Job Description Snippet</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {results.map((item, index) => {
+                                const jdText = item.job?.JobDescription || 'No description provided.';
+                                // Display first 200 characters as snippet
+                                const jdSnippet = jdText.substring(0, 200) + (jdText.length > 200 ? '...' : '');
+
+                                return (
+                                    <tr 
+                                        key={index} 
+                                        className={index === highlightedJobIndex ? 'selected-row' : ''}
+                                        onClick={() => handleRowClick(item, index)} 
+                                    >
+                                        <td>
+                                            <strong>{item.job?.Title || 'N/A'}</strong>
+                                            <br />
+                                            <span className="company-name">{item.company?.CompanyName || 'N/A'}</span>
+                                        </td>
+                                        {/* Use dangerouslySetInnerHTML to render HTML formatted text */}
+                                        <td 
+                                            className="jd-snippet-cell"
+                                            dangerouslySetInnerHTML={{ __html: jdSnippet }} 
+                                        />
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                    
+                    {/* Pagination Controls */}
+                    <div className="pagination-controls">
+                        <button 
+                            onClick={handlePrevPage} 
+                            disabled={loading || !hasPrevPage} 
+                            className="button prev-button"
+                        >
+                            {'< Previous Page'}
+                        </button>
+                        <span className="page-status">
+                            Page {currentPage}
+                        </span>
+                        <button 
+                            onClick={handleNextPage} 
+                            disabled={loading || !hasNextPage} 
+                            className="button next-button"
+                        >
+                            {loading && !isSearchingFirstPage ? 'Loading...' : 'Next Page >'}
+                        </button>
+                    </div>
+
+                    {!hasNextPage && results.length > 0 && (
+                        <div className="search-status-box all-loaded">
+                            <p>All visible results loaded.</p>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

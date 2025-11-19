@@ -1,76 +1,61 @@
 // frontend/src/services/api.js
 
-// ----------------------------------------------------------------------
-// CRITICAL CHANGE: Pointing directly to external API to bypass local proxy issues
-// WARNING: This may cause CORS errors in some browser/deployment environments.
-const JOB_SEARCH_API_URL = "https://www.findsgjobs.com/apis/job/searchable"; 
-// ----------------------------------------------------------------------
+import axios from 'axios';
 
-// Keep this URL for /api/analyze and /api/transform endpoints
-const API_URL = 'http://localhost:8000/api'; 
+// NOTE: Ensure this is the correct backend URL
+// For development: use localhost:8000
+// For production: use https://resume-smith-api.onrender.com
+const API_BASE = process.env.NODE_ENV === 'production'
+  ? 'https://resume-smith-api.onrender.com'
+  : 'http://localhost:8000'; 
+// External API for job search
+const JOBS_API_BASE = 'https://www.findsgjobs.com/apis/job/searchable';
 
-// --- General Fetch Utility (For local backend calls) ---
-async function apiFetch(endpoint, options = {}) {
-    const response = await fetch(`${API_URL}${endpoint}`, options);
-    
-    if (!response.ok) {
-        // Attempt to parse API error response
-        const errorData = await response.json().catch(() => ({ detail: "Unknown error" }));
-        const errorMessage = `API Error (${response.status}): ${errorData.detail || errorData.message || 'Server error'}`;
-        throw new Error(errorMessage);
-    }
-    
-    return response.json();
-}
+const api = axios.create({
+  baseURL: API_BASE,
+  timeout: 300000, 
+});
 
-// ----------------------------------------------------------------------
-// Part 1: Resume Analysis (Calls the local backend)
-// ----------------------------------------------------------------------
+// --- Job Search API Call (via backend proxy to bypass CORS) ---
+export const searchJobs = async (params) => {
+  const response = await api.get('/api/search-jobs', {
+    params: params,
+    timeout: 20000, // Timeout for job search
+  });
+  return response.data;
+};
+// --------------------------------------------------------
 
-export async function analyzeResume(formData) {
-    return apiFetch('/analyze', {
-        method: 'POST',
-        body: formData,
-    });
-}
 
-// ----------------------------------------------------------------------
-// Part 2: Resume Transformation (Calls the local backend)
-// ----------------------------------------------------------------------
+export const analyzeResume = async (provider, resumeFile, jdText) => {
+  const formData = new FormData();
+  formData.append('provider', provider);
+  formData.append('resume', resumeFile);
+  
+  // CRITICAL CHANGE: Append jdText as a string form field
+  formData.append('jd_text', jdText); 
+  
+  const response = await api.post('/api/analyze', formData, {
+    headers: {
+      // Still need 'multipart/form-data' because of the resume file
+      'Content-Type': 'multipart/form-data', 
+    },
+  });
+  return response.data;
+};
 
-export async function transformResume(formData) {
-    return apiFetch('/transform', {
-        method: 'POST',
-        body: formData,
-    });
-}
-
-// ----------------------------------------------------------------------
-// Job Search (NOW calls external API directly)
-// ----------------------------------------------------------------------
-
-export async function searchJobs(params) {
-    // Convert params object to URL search string (handles page, keywords, etc.)
-    const urlParams = new URLSearchParams(params).toString();
-    
-    try {
-        // Fetch directly from the external API URL
-        const response = await fetch(`${JOB_SEARCH_API_URL}?${urlParams}`);
-
-        if (!response.ok) {
-            // Attempt to parse API error response
-            const errorData = await response.json().catch(() => ({ message: "Failed to parse API error response." }));
-            const statusText = response.statusText || 'Error';
-            throw new Error(`Job Search Failed (${response.status} ${statusText}): ${errorData.message || JSON.stringify(errorData)}`);
-        }
-
-        const data = await response.json();
-        
-        // This returns the raw data structure from the external API
-        return data; 
-
-    } catch (error) {
-        console.error("Direct Job Search Failed:", error);
-        throw error;
-    }
-}
+// transformResume now includes job title and company name
+export const transformResume = async (provider, resumeText, jdText, jobTitle, company, part1Analysis, userAnswers) => {
+  const formData = new FormData();
+  formData.append('provider', provider);
+  formData.append('resume_text', resumeText);
+  formData.append('jd_text', jdText);
+  formData.append('job_title', jobTitle || '');
+  formData.append('company', company || '');
+  formData.append('part_1_analysis', part1Analysis);
+  formData.append('user_answers', userAnswers);
+  
+  // Assuming the content-type is still handled correctly by axios for form data
+  const response = await api.post('/api/transform', formData);
+  return response.data;
+};
