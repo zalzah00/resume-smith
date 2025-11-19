@@ -1,160 +1,203 @@
 // frontend/src/App.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import './App.css';
-import UserInput from './components/UserInput';
-import AnalysisResults from './components/AnalysisResults';
-import JobSearchAndSelect from './components/JobSearchAndSelect'; 
 import { analyzeResume, transformResume } from './services/api';
 
-const App = () => {
+// Components
+import JobSearchAndSelect from './components/JobSearchAndSelect';
+import UserInput from './components/UserInput';
+import AnalysisResults from './components/AnalysisResults';
+import FinalResume from './components/FinalResume';
+
+function App() {
+  // --- Step 2/3 States (LLM/Resume) ---
   const [resumeFile, setResumeFile] = useState(null);
-  // NEW STATE: State for the uploaded JD file object
-  const [jdFile, setJdFile] = useState(null); 
-  
-  const [jdText, setJdText] = useState('');
-  const [selectedJdTitle, setSelectedJdTitle] = useState('');
-  const [selectedCompany, setSelectedCompany] = useState(''); 
   const [provider, setProvider] = useState('gemini');
-  const [analysis, setAnalysis] = useState(null);
-  const [transformedResume, setTransformedResume] = useState(null);
+
+  // --- Step 1 States (Job Description) ---
+  const [jdText, setJdText] = useState(''); // JD text from search result
+  // CRITICAL CHANGE 1: New state for JD file upload
+  const [jdFile, setJdFile] = useState(null); 
+  // State to track which JD was selected from the search UI (for display/disabling)
+  const [jdSelectedTitle, setJdSelectedTitle] = useState(''); 
+  const [selectedCompany, setSelectedCompany] = useState('');
+
+  // --- Results and Status States ---
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  // New setter function for JD Text (from search)
-  const handleSetJdText = (text, title, company) => {
-    // Rule: Selecting a job clears any uploaded JD file
-    setJdFile(null);
-    setJdText(text);
-    setSelectedJdTitle(title);
-    setSelectedCompany(company || '');
-  };
-
-  // NEW: Setter function for JD File (from upload)
-  const handleSetJdFile = (file) => {
-    // Rule: Uploading a file clears any selected job text
-    setJdText('');
-    setSelectedJdTitle('');
-    setSelectedCompany('');
-    setJdFile(file);
-  };
+  const [analysis, setAnalysis] = useState(null);
+  const [transformedResume, setTransformedResume] = useState(null);
   
-  // New deselect function (only clears text state, leaves file state as is)
-  const handleDeselect = () => {
-    setJdText('');
-    setSelectedJdTitle('');
+  // --- Analysis Prep States (Data extracted from analysis result for Part 2) ---
+  const [resumeText, setResumeText] = useState('');
+  
+  
+  // --- Core Logic ---
+  
+  // CRITICAL CHANGE 2: Unified JD check. Analysis is ready if JD Text (from search) OR JD File (from upload) is present.
+  const isJdReady = !!jdText || !!jdFile;
+
+  // CRITICAL CHANGE 3: Handler for JD selection/deselection
+  const handleJdSelect = useCallback((title, company, text) => {
+    // If a JD is selected via search, clear any uploaded file
+    setJdFile(null); 
+    setJdSelectedTitle(title);
+    setSelectedCompany(company);
+    setJdText(text); // JD text from search is always stored here
+  }, []);
+
+  const handleJdDeselect = useCallback(() => {
+    setJdSelectedTitle('');
     setSelectedCompany('');
-  };
+    setJdText('');
+  }, []);
+  
+  // CRITICAL CHANGE 4: Handler for JD File upload
+  const handleJdFileChange = useCallback((file) => {
+    // If a JD file is uploaded, clear any selected search result
+    setJdSelectedTitle(''); 
+    setSelectedCompany('');
+    setJdText('');
+    setJdFile(file);
+  }, []);
 
-
-  const handleAnalyze = async () => {
-    setError(null);
-    setAnalysis(null);
-    setTransformedResume(null);
-
-    // CRITICAL CHANGE: JD is ready if EITHER jdText (from search) OR jdFile (from upload) exists
-    const isJdReady = !!jdText || !!jdFile;
-
-    if (!provider || !resumeFile || !isJdReady) {
-      // Improved error message to reflect the dual input options
-      setError('Please select an LLM, upload a resume, and provide a Job Description (via search or file upload).');
+  // --- Step 1: Analyze Resume (Part 1) ---
+  const onAnalyze = async () => {
+    if (!resumeFile || !isJdReady) {
+      setError("Please upload a resume and provide a Job Description (via search or file).");
       return;
     }
 
     setLoading(true);
+    setError(null);
+    setAnalysis(null);
+    setTransformedResume(null);
+
     try {
-      // CRITICAL CHANGE: Pass both jdText and jdFile. The API service handles sending one of them.
-      const result = await analyzeResume(provider, resumeFile, jdText, jdFile);
-      
-      setAnalysis({
-        part_1_analysis: result.part_1_analysis,
-        original_resume_text: result.original_resume_text,
-      });
+      // CRITICAL CHANGE 5: Pass the JD file if it exists, otherwise pass the JD text.
+      const response = await analyzeResume(provider, resumeFile, jdText, jdFile); 
+
+      if (response.status === 'success') {
+        setAnalysis(response.analysis);
+        setResumeText(response.resume_text); // Store extracted resume text for Part 2
+      } else {
+        setError(response.message || 'Analysis failed due to an unknown error.');
+      }
     } catch (err) {
-      setError(`Analysis failed: ${err.message}. Check the backend API.`);
+      console.error(err);
+      // Backend returns a detailed error in JSON, try to extract it
+      const detailedError = err.response?.data?.detail || err.message;
+      setError(`Analysis failed: ${detailedError}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleTransform = async (userAnswers) => {
-    setLoading(true);
+  // --- Step 2: Transform Resume (Part 2) ---
+  const onTransform = async (userAnswers) => {
+    setLoading(true); // Re-use loading state for Part 2
     setError(null);
+
     try {
-      // jdText here will be the text from the search/select, or an empty string if a file was used.
-      // The backend uses the original prompt context to manage this, so passing the current jdText is fine.
-      const result = await transformResume(
+      const response = await transformResume(
         provider,
-        analysis.original_resume_text,
-        jdText,
-        selectedJdTitle,
-        selectedCompany,
-        analysis.part_1_analysis,
-        userAnswers
+        resumeText, // Extracted resume text from Part 1
+        jdText || (jdFile ? `(JD provided as file: ${jdFile.name})` : ''), // JD text from search or placeholder for file
+        jdSelectedTitle, // Contextual data
+        selectedCompany, // Contextual data
+        JSON.stringify(analysis), // Full analysis result for LLM
+        userAnswers // User clarifications
       );
-      setTransformedResume(result.transformed_resume);
+
+      if (response.status === 'success') {
+        setTransformedResume(response.transformed_resume);
+      } else {
+        setError(response.message || 'Transformation failed due to an unknown error.');
+      }
     } catch (err) {
-      setError(`Transformation failed: ${err.message}.`);
+      console.error(err);
+      const detailedError = err.response?.data?.detail || err.message;
+      setError(`Transformation failed: ${detailedError}`);
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Reset all states
+  const handleReset = () => {
+    setResumeFile(null);
+    setProvider('gemini');
+    setJdText('');
+    setJdFile(null); 
+    setJdSelectedTitle('');
+    setSelectedCompany('');
+    setLoading(false);
+    setError(null);
+    setAnalysis(null);
+    setTransformedResume(null);
+    setResumeText('');
   };
 
   return (
     <div className="App">
-      <header className="App-header">
-        <h1>Resume Transformer ✨</h1>
+      <header>
+        <h1>🤖 AI Resume Transformer</h1>
+        <p>Use Gemini or Groq to tailor your resume to a specific job description.</p>
       </header>
       
-      <main className="App-main">
-        {/* Job Search & Select Component */}
-        <JobSearchAndSelect 
-            setJdText={handleSetJdText}
-            selectedJdTitle={selectedJdTitle}
-            onDeselect={handleDeselect}
-            selectedCompany={selectedCompany} 
-            fullJdText={jdText}
-            // NEW PROP: Pass the jdFile status down for the component to visually disable/guide the user
-            isJdFileUploaded={!!jdFile}
-        />
+      <main>
+        {transformedResume ? (
+          <>
+            <FinalResume transformedResume={transformedResume} />
+            <button onClick={handleReset} className="reset-button">
+              Start New Analysis
+            </button>
+          </>
+        ) : analysis ? (
+          // --- Step 3: Analysis Results and User Input for Part 2 ---
+          <AnalysisResults
+            analysis={analysis}
+            loading={loading}
+            transformedResume={transformedResume}
+            onTransform={onTransform}
+          />
+        ) : (
+          // --- Step 1 & 2: Initial Inputs ---
+          <>
+            <JobSearchAndSelect 
+              setJdText={setJdText}
+              selectedJdTitle={jdSelectedTitle}
+              selectedCompany={selectedCompany}
+              fullJdText={jdText}
+              onDeselect={handleJdDeselect}
+              // Pass JD file state and handler to JobSearchAndSelect
+              jdFile={jdFile} 
+              setJdFile={handleJdFileChange} // Use the custom handler
+            />
+            
+            <hr />
 
-        {/* User Input Component */}
-        <UserInput 
-          // Resume File (NO CHANGE)
-          resumeFile={resumeFile}
-          setResumeFile={setResumeFile}
-          
-          // LLM Provider (NO CHANGE)
-          provider={provider}
-          setProvider={setProvider}
-          
-          // NEW PROPS for JD File Management
-          jdFile={jdFile}
-          setJdFile={handleSetJdFile} // Use the new handler for mutual exclusivity
-          
-          // CRITICAL PROP CHANGE: JD is ready if EITHER jdText OR jdFile is present
-          isJdReady={!!jdText || !!jdFile}
-          
-          // Status props to pass down
-          jdSelectedTitle={selectedJdTitle} // Pass title down for display status
-          
-          onAnalyze={handleAnalyze}
-          loading={loading}
-          error={error}
-        />
-
-        <AnalysisResults
-          analysis={analysis}
-          transformedResume={transformedResume}
-          onTransform={handleTransform}
-          loading={loading}
-        />
+            <UserInput
+              resumeFile={resumeFile}
+              setResumeFile={setResumeFile}
+              provider={provider}
+              setProvider={setProvider}
+              onAnalyze={onAnalyze}
+              loading={loading}
+              error={error}
+              // CRITICAL PROPS: Passed simplified JD state for enabling logic
+              isJdReady={isJdReady}
+              // Removed unused JD file props from UserInput
+            />
+          </>
+        )}
       </main>
       <footer>
-        <p>© 2025 Resume Transformer</p>
+        <p>&copy; 2024 Resume Transformer</p>
       </footer>
     </div>
   );
-};
+}
 
 export default App;
