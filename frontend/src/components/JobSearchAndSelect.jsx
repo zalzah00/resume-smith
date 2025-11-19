@@ -2,10 +2,8 @@
 
 import React, { useState } from 'react';
 import { searchJobs } from '../services/api';
-import CONFIG from '../config/jobConfig'; // <--- Configuration is now imported!
+import CONFIG from '../config/jobConfig'; 
 import './JobSearchAndSelect.css';
-
-// The CONFIG object is no longer hardcoded here.
 
 // Helper function to get the display name for a code (for status message)
 const getDisplayName = (code, configKey) => {
@@ -16,25 +14,36 @@ const getDisplayName = (code, configKey) => {
     return 'N/A';
 };
 
+const PER_PAGE_COUNT = 5; // Define the fixed number of results per page
+
 const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
-    // Initial state uses the imported CONFIG
     const [keyword, setKeyword] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(CONFIG.JOB_CATEGORIES["All Categories"]);
     const [selectedEmployment, setSelectedEmployment] = useState(CONFIG.EMPLOYMENT_TYPES["All Types"]);
     const [selectedMRT, setSelectedMRT] = useState(CONFIG.MRT_STATIONS["All Stations"]);
+    
+    // State for Pagination
     const [results, setResults] = useState([]);
+    const [currentPage, setCurrentPage] = useState(1); // Tracks the current page number
+    const [totalResults, setTotalResults] = useState(0); // Tracks the total jobs available
+    const [isInitialSearch, setIsInitialSearch] = useState(true); // Helps reset state for a new search
+    
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    
 
-    const handleSearch = async (e) => {
-        e.preventDefault();
+    // Function to handle the actual API call
+    const fetchJobs = async (pageToFetch, clearResults) => {
         setLoading(true);
-        setError(null);
-        setResults([]);
-        
+        // Clear error only when starting a fetch, not when loading more
+        if (clearResults) { 
+            setError(null);
+            setResults([]); // Clear immediately for visual feedback on new search
+        }
+
         const params = {
-            page: 1,
-            per_page_count: 5, // Keep results manageable
+            page: pageToFetch,
+            per_page_count: PER_PAGE_COUNT,
         };
 
         if (selectedCategory) params.JobCategory = selectedCategory;
@@ -45,31 +54,53 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         try {
             console.log('Searching with params:', params);
             const data = await searchJobs(params);
-            console.log('API response:', data);
             
-            // Expected path: data.data.result
+            // Assuming the API response structure: data.data.result and data.data.total_records
             const jobResults = data?.data?.result || [];
-            console.log('Extracted job results:', jobResults);
-            
-            if (jobResults.length === 0) {
-                // Also display the search parameters for context
-                const searchCriteria = [
-                    keyword.trim() ? `Keyword: ${keyword.trim()}` : '',
-                    selectedCategory ? `Category: ${getDisplayName(selectedCategory, 'JOB_CATEGORIES')}` : '',
-                    selectedEmployment ? `Type: ${getDisplayName(selectedEmployment, 'EMPLOYMENT_TYPES')}` : '',
-                    selectedMRT ? `MRT: ${getDisplayName(selectedMRT, 'MRT_STATIONS')}` : '',
-                ].filter(Boolean).join(', ');
-                
-                setError(`No jobs found matching your criteria: ${searchCriteria || 'All'}.`);
+            const newTotal = data?.data?.total_records || 0;
+
+            if (clearResults) {
+                // Initial search or new search
+                setResults(jobResults);
+                setCurrentPage(pageToFetch); 
+            } else {
+                // Load More button click - Append results
+                setResults(prevResults => [...prevResults, ...jobResults]);
+                setCurrentPage(pageToFetch); // Update the page state on success
             }
-            setResults(jobResults);
+            
+            setTotalResults(newTotal);
+
+            if (newTotal === 0 && clearResults) {
+                 setError("No jobs found matching your criteria.");
+            }
+            
         } catch (err) {
             console.error('Search error:', err);
             setError(`Failed to fetch jobs: ${err.message}`);
         } finally {
             setLoading(false);
+            setIsInitialSearch(false);
         }
+    }
+
+    // Handler for form submission (Always starts a new search, clearing previous results)
+    const handleSearch = async (e) => {
+        e.preventDefault();
+        
+        setTotalResults(0);
+        setCurrentPage(1); // Ensure start from page 1
+        setIsInitialSearch(true); 
+        
+        await fetchJobs(1, true); // Fetch page 1, clear existing results
     };
+
+    // Handler for the "Load More" button
+    const handleLoadMore = () => {
+        const nextPage = currentPage + 1;
+        fetchJobs(nextPage, false); // Fetch next page, DO NOT clear results
+    };
+
 
     const handleSelectJob = (jobItem) => {
         const title = jobItem.job?.Title || 'Selected Job';
@@ -79,7 +110,14 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         // Pass the raw JobDescription text, job title, and company to the parent component (App.jsx)
         setJdText(description, title, company);
         setResults([]); // Clear results after selection
+        setTotalResults(0); // Clear total results count
+        setCurrentPage(1); // Reset page state
     };
+
+    // Check if there are more pages to load
+    const hasMoreResults = results.length < totalResults;
+    // Determine if we are loading the initial page (to show 'Searching...' on the main button)
+    const isSearchingFirstPage = isInitialSearch && loading; 
 
     if (selectedJdTitle) {
         // Display the selected job confirmation
@@ -109,7 +147,6 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
                     className="keyword-input"
                 />
                 <div className="select-group">
-                    {/* Select dropdowns now use the imported CONFIG */}
                     <select value={selectedCategory || ''} onChange={(e) => setSelectedCategory(e.target.value ? parseInt(e.target.value) : null)}>
                         {Object.entries(CONFIG.JOB_CATEGORIES).map(([name, code]) => (
                             <option key={name} value={code || ''}>{name}</option>
@@ -126,16 +163,16 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
                         ))}
                     </select>
                 </div>
-                <button type="submit" disabled={loading} className="search-button">
-                    {loading ? 'Searching...' : '🔍 Search Jobs'}
+                <button type="submit" disabled={loading && isSearchingFirstPage} className="search-button">
+                    {loading && isSearchingFirstPage ? 'Searching...' : '🔍 Search Jobs'}
                 </button>
             </form>
 
             {error && <div className="error-message">{error}</div>}
-
+            
             {results.length > 0 && (
                 <div className="search-results">
-                    <h4>Top {results.length} Results:</h4>
+                    <h4>Showing {results.length} of {totalResults} Results:</h4>
                     {results.map((item, index) => (
                         <div key={index} className="job-card">
                             <div className="job-details">
@@ -150,6 +187,23 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
                             </button>
                         </div>
                     ))}
+                    
+                    {/* Load More Button */}
+                    {hasMoreResults && (
+                        <button 
+                            onClick={handleLoadMore} 
+                            disabled={loading && !isSearchingFirstPage} // Disable only when loading more
+                            className="button load-more-button"
+                        >
+                            {loading && !isSearchingFirstPage ? 'Loading More...' : `Load More Jobs (${totalResults - results.length} left)`}
+                        </button>
+                    )}
+
+                    {results.length === totalResults && totalResults > 0 && (
+                        <div className="search-status-box all-loaded">
+                            <p>All {totalResults} results loaded.</p>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
