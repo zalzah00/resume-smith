@@ -106,7 +106,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         // 2. Select the job and pass data to the parent component
         const title = jobItem.job?.Title || 'Selected Job';
         const company = jobItem.company?.CompanyName || 'N/A';
-        const description = item.job?.JobDescription || '';
+        const description = jobItem.job?.JobDescription || '';
         
         setJdText(description, title, company);
     };
