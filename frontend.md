@@ -240,7 +240,7 @@ import React, { useState } from 'react';
 import './App.css';
 import UserInput from './components/UserInput';
 import AnalysisResults from './components/AnalysisResults';
-import JobSearchAndSelect from './components/JobSearchAndSelect'; // NEW IMPORT
+import JobSearchAndSelect from './components/JobSearchAndSelect'; 
 import { analyzeResume, transformResume } from './services/api';
 
 const App = () => {
@@ -248,22 +248,25 @@ const App = () => {
   // Replaced jdFile state with jdText
   const [jdText, setJdText] = useState('');
   const [selectedJdTitle, setSelectedJdTitle] = useState(''); // To display selected job name
+  const [selectedCompany, setSelectedCompany] = useState(''); // Store company name for LLM prompt
   const [provider, setProvider] = useState('gemini');
   const [analysis, setAnalysis] = useState(null);
   const [transformedResume, setTransformedResume] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // New setter function to handle text and title
-  const handleSetJdText = (text, title) => {
+  // New setter function to handle text, title, and company
+  const handleSetJdText = (text, title, company) => {
     setJdText(text);
     setSelectedJdTitle(title);
+    setSelectedCompany(company || '');
   };
   
   // New deselect function
-  const handleDeselectJob = () => {
+  const handleDeselect = () => {
     setJdText('');
     setSelectedJdTitle('');
+    setSelectedCompany('');
   };
 
 
@@ -298,11 +301,13 @@ const App = () => {
     setLoading(true);
     setError(null);
     try {
-      // The transformResume call already correctly uses jdText, so no change here
+      // The transformResume call includes jdText, job title, and company
       const result = await transformResume(
         provider,
         analysis.original_resume_text,
-        jdText, // jdText is still correct here
+        jdText,
+        selectedJdTitle,
+        selectedCompany,
         analysis.part_1_analysis,
         userAnswers
       );
@@ -321,19 +326,19 @@ const App = () => {
       </header>
       
       <main className="App-main">
-        {/* Job Search & Select Component */}
+        {/* Job Search & Select Component - ADDING new props */}
         <JobSearchAndSelect 
             setJdText={handleSetJdText}
             selectedJdTitle={selectedJdTitle}
-            onDeselect={handleDeselectJob}
+            onDeselect={handleDeselect}
+            selectedCompany={selectedCompany} // NEW
+            fullJdText={jdText}               // NEW
         />
 
         <UserInput 
           // Passed resumeFile and setResumeFile (NO CHANGE)
           resumeFile={resumeFile}
           setResumeFile={setResumeFile}
-          
-          // Removed jdFile related props
           
           // LLM Provider (NO CHANGE)
           provider={provider}
@@ -1454,243 +1459,93 @@ export default FinalResume;
 
 ```css
 // frontend/src/components/JobSearchAndSelect.css
-/* JobSearchAndSelect.css */
+/* --- V2 Tabular Display Styles --- */
 
-:root {
-  --primary-color: #1e3a8a;
-  --primary-light: #3b82f6;
-  --primary-dark: #1e40af;
-  --success-color: #16a34a;
-  --danger-color: #dc2626;
-  --warning-color: #ea580c;
-  --neutral-50: #f9fafb;
-  --neutral-100: #f3f4f6;
-  --neutral-200: #e5e7eb;
-  --neutral-300: #d1d5db;
-  --neutral-600: #4b5563;
-  --neutral-700: #374151;
-  --neutral-900: #111827;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+.job-results-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.search-status-box {
-  background: white;
-  border: 2px solid var(--neutral-200);
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 36px; /* increased spacing between section 1 and next section */
-  box-shadow: var(--shadow-md);
-  transition: all 0.3s ease;
+.job-results-table th, 
+.job-results-table td {
+    border: 1px solid #ddd;
+    padding: 10px 15px;
+    text-align: left;
+    vertical-align: top;
 }
 
-.search-status-box.selected {
-  border-color: var(--success-color);
-  background: linear-gradient(135deg, rgba(22, 163, 74, 0.05) 0%, rgba(22, 163, 74, 0.02) 100%);
+.job-results-table th {
+    background-color: #f4f4f4;
+    font-weight: bold;
+    color: #333;
 }
 
-.search-status-box h3 {
-  margin: 0 0 12px 0;
-  color: var(--neutral-900);
-  font-size: 1.125rem;
-  font-weight: 600;
+/* Row Hover and Selection Styling */
+.job-results-table tbody tr {
+    transition: background-color 0.2s ease, border-left 0.2s ease;
 }
 
-.search-status-box p {
-  margin: 8px 0;
-  color: var(--neutral-700);
-  font-size: 0.95rem;
+.job-results-table tbody tr:hover {
+    cursor: pointer;
+    background-color: #e6f7ff; /* Light blue hover */
 }
 
-.search-status-box button {
-  background-color: var(--danger-color);
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  margin-top: 12px;
+/* Highlight for the currently selected job */
+.job-results-table tbody tr.selected-row {
+    background-color: #d0e0ff; /* Distinct blue highlight */
+    border-left: 5px solid #0056b3; /* Stronger border for emphasis */
 }
 
-.search-status-box button:hover {
-  background-color: #b91c1c;
+.job-results-table .company-name {
+    display: block;
+    font-size: 0.9em;
+    color: #555;
+    margin-top: 2px;
 }
 
-.search-form {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 36px; /* extra breathing room between form and results */
-  box-shadow: var(--shadow-md);
+.job-results-table .jd-snippet-cell {
+    font-size: 0.9em;
+    color: #444;
+    line-height: 1.4;
 }
 
-.search-form h3 {
-  margin: 0 0 20px 0;
-  color: var(--neutral-900);
-  font-size: 1.125rem;
-  font-weight: 600;
+/* Pagination Controls Styling */
+.pagination-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 20px 0;
+    gap: 15px;
 }
 
-.search-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
+.pagination-controls .page-status {
+    font-weight: bold;
+    color: #333;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
+/* Ensure buttons in controls look consistent */
+.pagination-controls .button {
+    padding: 8px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--neutral-700);
+.pagination-controls .button:hover:not(:disabled) {
+    background-color: #0056b3;
 }
 
-.form-group input,
-.form-group select {
-  padding: 10px 12px;
-  border: 1px solid var(--neutral-300);
-  border-radius: 6px;
-  font-size: 0.95rem;
-  font-family: inherit;
-  transition: border-color 0.2s, box-shadow 0.2s;
+.pagination-controls .button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
 }
 
-.form-group input:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: var(--primary-light);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.search-button {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-  color: white;
-  border: none;
-  padding: 10px 20px; /* slightly reduced to match other buttons */
-  border-radius: 6px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  box-shadow: var(--shadow-md);
-}
-
-.search-button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-}
-
-.search-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.search-results {
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: var(--shadow-md);
-}
-
-.search-results h4 {
-  margin: 0;
-  padding: 16px 20px;
-  background-color: var(--neutral-100);
-  border-bottom: 1px solid var(--neutral-200);
-  color: var(--neutral-900);
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-.job-item {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--neutral-200);
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.job-item:last-child {
-  border-bottom: none;
-}
-
-.job-item:hover {
-  background-color: var(--neutral-50);
-}
-
-.job-item-title {
-  font-weight: 600;
-  color: var(--primary-color);
-  margin-bottom: 4px;
-  font-size: 0.95rem;
-}
-
-.job-item-company {
-  color: var(--neutral-700);
-  font-size: 0.875rem;
-  margin-bottom: 2px;
-}
-
-.job-item-details {
-  color: var(--neutral-600);
-  font-size: 0.825rem;
-  margin-bottom: 4px;
-}
-
-.job-item button {
-  background-color: var(--primary-light);
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  margin-top: 8px;
-}
-
-.job-item button:hover {
-  background-color: var(--primary-dark);
-}
-
-.error-message {
-  background-color: rgba(220, 38, 38, 0.1);
-  border: 1px solid #fecaca;
-  color: #991b1b;
-  padding: 12px 16px;
-  border-radius: 6px;
-  margin-bottom: 16px;
-  font-size: 0.875rem;
-}
-
-.loading-message {
-  text-align: center;
-  color: var(--neutral-600);
-  padding: 20px;
-  font-size: 0.95rem;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .search-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .search-form {
-    padding: 16px;
-  }
-}
-
+/* You may need to keep or adjust existing styles for .job-search-container, .search-form, etc. */
 // end_of_file
 ```
 
@@ -1699,32 +1554,8 @@ export default FinalResume;
 
 import React, { useState } from 'react';
 import { searchJobs } from '../services/api';
+import CONFIG from '../config/jobConfig'; 
 import './JobSearchAndSelect.css';
-
-// --- CONFIGURATION (Extracted from job_search_app.py) ---
-// This should match the CONFIG from your job_search_app.py
-const CONFIG = {
-    "JOB_CATEGORIES": {
-        "All Categories": null,
-        "Information Technology": 1861,
-        "F&B (Food & Beverage)": 1855,
-        "Sales / Retail": 1875,
-        // ... (Add the rest of your categories here)
-    },
-    "EMPLOYMENT_TYPES": {
-        "All Types": null,
-        "Full Time": 76,
-        "Part Time": 115,
-        "Contract": 121,
-        // ... (Add the rest of your employment types here)
-    },
-    "MRT_STATIONS": {
-        "All Stations": null,
-        "Woodlands (NS9/TE2)": 1833,
-        "Jurong East (EW24/NS1)": 1840,
-        // ... (Add the rest of your MRT stations here)
-    },
-};
 
 // Helper function to get the display name for a code (for status message)
 const getDisplayName = (code, configKey) => {
@@ -1735,24 +1566,39 @@ const getDisplayName = (code, configKey) => {
     return 'N/A';
 };
 
-const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
+const PER_PAGE_COUNT = 5; // Define the fixed number of results per page
+
+// ACCEPTING new props: selectedCompany and fullJdText
+const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJdText, onDeselect }) => {
     const [keyword, setKeyword] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(CONFIG.JOB_CATEGORIES["All Categories"]);
     const [selectedEmployment, setSelectedEmployment] = useState(CONFIG.EMPLOYMENT_TYPES["All Types"]);
     const [selectedMRT, setSelectedMRT] = useState(CONFIG.MRT_STATIONS["All Stations"]);
+    
+    // State for Pagination
     const [results, setResults] = useState([]);
+    const [currentPage, setCurrentPage] = useState(1); 
+    const [totalResults, setTotalResults] = useState(0); 
+    
+    // Tracks how many items were returned in the last API call.
+    const [lastFetchedCount, setLastFetchedCount] = useState(0); 
+    
+    // V2: State for row selection
+    const [highlightedJobIndex, setHighlightedJobIndex] = useState(null); 
+    
+    const [isInitialSearch, setIsInitialSearch] = useState(true); 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    
 
-    const handleSearch = async (e) => {
-        e.preventDefault();
+    // Function to handle the actual API call
+    const fetchJobs = async (pageToFetch) => { 
         setLoading(true);
         setError(null);
-        setResults([]);
-        
+
         const params = {
-            page: 1,
-            per_page_count: 5, // Keep results manageable
+            page: pageToFetch,
+            per_page_count: PER_PAGE_COUNT,
         };
 
         if (selectedCategory) params.JobCategory = selectedCategory;
@@ -1763,52 +1609,127 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         try {
             console.log('Searching with params:', params);
             const data = await searchJobs(params);
-            console.log('API response:', data);
             
-            // Expected path: data.data.result
             const jobResults = data?.data?.result || [];
-            console.log('Extracted job results:', jobResults);
-            
-            if (jobResults.length === 0) {
-                setError("No jobs found matching your criteria.");
-            }
+            const newTotal = data?.data?.total_records || 0;
+
+            // TRADITIONAL PAGINATION: Always REPLACE results, never append.
             setResults(jobResults);
+            
+            // V2: Reset highlight when loading new page
+            setHighlightedJobIndex(null); 
+
+            // Update successful fetch states
+            setCurrentPage(pageToFetch); 
+            setTotalResults(newTotal);
+            setLastFetchedCount(jobResults.length); 
+            
+            // Only set an error if the actual jobResults array is empty.
+            if (jobResults.length === 0 && pageToFetch === 1) {
+                 setError("No jobs found matching your criteria.");
+            }
+            
         } catch (err) {
             console.error('Search error:', err);
             setError(`Failed to fetch jobs: ${err.message}`);
         } finally {
             setLoading(false);
+            setIsInitialSearch(false);
         }
+    }
+
+    // Handler for form submission
+    const handleSearch = async (e) => {
+        e.preventDefault();
+        
+        setResults([]); 
+        setTotalResults(0);
+        setLastFetchedCount(0);
+        setCurrentPage(1); 
+        setIsInitialSearch(true); 
+        
+        await fetchJobs(1); // Fetch page 1
     };
 
-    const handleSelectJob = (jobItem) => {
+    // V2: HANDLER for clicking a table row to select and highlight
+    const handleRowClick = (jobItem, index) => {
+        // 1. Highlight the row
+        setHighlightedJobIndex(index); 
+
+        // 2. Select the job and pass data to the parent component
         const title = jobItem.job?.Title || 'Selected Job';
-        const description = jobItem.job?.JobDescription || '';
+        const company = jobItem.company?.CompanyName || 'N/A';
+        // Corrected variable usage from 'item' to 'jobItem' (Fix from previous turn)
+        const description = jobItem.job?.JobDescription || ''; 
         
-        // Pass the raw JobDescription text to the parent component (App.jsx)
-        setJdText(description, title);
-        setResults([]); // Clear results after selection
+        // This call updates selectedJdTitle in the parent component (App.jsx), triggering the screen change
+        setJdText(description, title, company); 
     };
+
+    // Handler for the "Next Page" button
+    const handleNextPage = () => {
+        const nextPage = currentPage + 1;
+        fetchJobs(nextPage);
+    };
+
+    // Handler for the "Previous Page" button
+    const handlePrevPage = () => {
+        const prevPage = currentPage - 1;
+        if (prevPage >= 1) {
+            fetchJobs(prevPage);
+        }
+    };
+    
+    // Derived state
+    const hasNextPage = lastFetchedCount === PER_PAGE_COUNT;
+    const hasPrevPage = currentPage > 1;
+    const isSearchingFirstPage = isInitialSearch && loading; 
+    const displayTotalResults = Math.max(results.length, totalResults);
+    const startRange = results.length > 0 ? (currentPage - 1) * PER_PAGE_COUNT + 1 : 0;
+    const endRange = startRange > 0 ? startRange + results.length - 1 : 0;
+
 
     if (selectedJdTitle) {
         // Display the selected job confirmation
+        // MODIFIED BLOCK START: Now uses selectedCompany and fullJdText
+        
+        // Create a snippet using the full JD text passed from the parent
+        const snippet = fullJdText.substring(0, 200) + (fullJdText.length > 200 ? '...' : '');
+
         return (
             <div className="search-status-box selected">
                 <h3>✅ Job Selected</h3>
-                <p><strong>Job Title:</strong> {selectedJdTitle}</p>
+                
+                <div className="selected-job-details">
+                    <p><strong>Job Title:</strong> {selectedJdTitle}</p>
+                    <p><strong>Company:</strong> {selectedCompany}</p>
+                    <p>
+                        <strong>JD Snippet:</strong> 
+                        {/* Re-using dangerouslySetInnerHTML to render the formatted snippet */}
+                        <span 
+                            dangerouslySetInnerHTML={{ __html: snippet }} 
+                            style={{ display: 'block', marginTop: '5px' }}
+                        />
+                    </p>
+                </div>
+
                 <button 
-                    onClick={onDeselect} 
+                    onClick={() => {
+                        setHighlightedJobIndex(null); // Clear highlight on deselect
+                        onDeselect(); // Clear parent selection
+                    }} 
                     className="button deselect"
                 >
                     Change Job
                 </button>
             </div>
         );
+        // MODIFIED BLOCK END
     }
 
     return (
         <div className="job-search-container">
-            <h3>1. Search for a Job Description</h3>
+            <h3>1. Search for a Job Description (Click Row to Select)</h3>
             <form onSubmit={handleSearch} className="search-form">
                 <input
                     type="text"
@@ -1834,30 +1755,81 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
                         ))}
                     </select>
                 </div>
-                <button type="submit" disabled={loading} className="search-button">
-                    {loading ? 'Searching...' : '🔍 Search Jobs'}
+                <button type="submit" disabled={loading && isSearchingFirstPage} className="search-button">
+                    {loading && isSearchingFirstPage ? 'Searching...' : '🔍 Search Jobs'}
                 </button>
             </form>
 
             {error && <div className="error-message">{error}</div>}
-
+            
             {results.length > 0 && (
                 <div className="search-results">
-                    <h4>Top {results.length} Results:</h4>
-                    {results.map((item, index) => (
-                        <div key={index} className="job-card">
-                            <div className="job-details">
-                                <strong>{item.job?.Title || 'N/A'}</strong>
-                                <span>{item.company?.CompanyName || 'N/A'}</span>
-                            </div>
-                            <button 
-                                onClick={() => handleSelectJob(item)} 
-                                className="button select-job"
-                            >
-                                Select This Job
-                            </button>
+                    <h4>
+                        Showing {startRange}-{endRange} of {displayTotalResults === results.length && !hasNextPage ? results.length : 'many'} Results:
+                    </h4>
+
+                    {/* V2: Tabular Display */}
+                    <table className="job-results-table">
+                        <thead>
+                            <tr>
+                                <th style={{width: '30%'}}>Job Title / Company</th>
+                                <th style={{width: '70%'}}>Job Description Snippet</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {results.map((item, index) => {
+                                const jdText = item.job?.JobDescription || 'No description provided.';
+                                // Display first 200 characters as snippet
+                                const jdSnippet = jdText.substring(0, 200) + (jdText.length > 200 ? '...' : '');
+
+                                return (
+                                    <tr 
+                                        key={index} 
+                                        className={index === highlightedJobIndex ? 'selected-row' : ''}
+                                        onClick={() => handleRowClick(item, index)} 
+                                    >
+                                        <td>
+                                            <strong>{item.job?.Title || 'N/A'}</strong>
+                                            <br />
+                                            <span className="company-name">{item.company?.CompanyName || 'N/A'}</span>
+                                        </td>
+                                        {/* Use dangerouslySetInnerHTML to render HTML formatted text */}
+                                        <td 
+                                            className="jd-snippet-cell"
+                                            dangerouslySetInnerHTML={{ __html: jdSnippet }} 
+                                        />
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                    
+                    {/* Pagination Controls */}
+                    <div className="pagination-controls">
+                        <button 
+                            onClick={handlePrevPage} 
+                            disabled={loading || !hasPrevPage} 
+                            className="button prev-button"
+                        >
+                            {'< Previous Page'}
+                        </button>
+                        <span className="page-status">
+                            Page {currentPage}
+                        </span>
+                        <button 
+                            onClick={handleNextPage} 
+                            disabled={loading || !hasNextPage} 
+                            className="button next-button"
+                        >
+                            {loading && !isSearchingFirstPage ? 'Loading...' : 'Next Page >'}
+                        </button>
+                    </div>
+
+                    {!hasNextPage && results.length > 0 && (
+                        <div className="search-status-box all-loaded">
+                            <p>All visible results loaded.</p>
                         </div>
-                    ))}
+                    )}
                 </div>
             )}
         </div>
@@ -2181,6 +2153,55 @@ export default UserInput;
 ```
 
 ```tsx
+// frontend/src/config/jobConfig.js
+
+/**
+ * Static configuration data for job search filters.
+ * The numerical codes are typically IDs expected by the backend API.
+ * This should be kept consistent with your Python backend (e.g., job_search_app.py).
+ */
+const CONFIG = {
+    "JOB_CATEGORIES": {
+        "All Categories": null,
+        "Information Technology": 1861,
+        "F&B (Food & Beverage)": 1855,
+        "Sales / Retail": 1875,
+        "Accounting / Auditing / Taxation": 1845,
+        "Admin / Secretarial": 1846,
+        "Banking and Finance": 1847,
+        "Building and Construction": 1848,
+        "Customer Service": 1850,
+        "Design": 1852,
+        "Education / Training": 1853,
+        "Engineering": 1854,
+        "Healthcare / Pharmaceutical": 1856,
+    },
+    "EMPLOYMENT_TYPES": {
+        "All Types": null,
+        "Full Time": 76,
+        "Part Time": 115,
+        "Contract": 121,
+        "Permanent": 88,
+        "Temporary": 105,
+        "Internship / Attachment": 90,
+    },
+    "MRT_STATIONS": {
+        "All Stations": null,
+        "Woodlands (NS9/TE2)": 1833,
+        "Jurong East (EW24/NS1)": 1840,
+        "Changi Airport (CG2)": 1787,
+        "Raffles Place (EW14/NS26)": 1814,
+        "Dhoby Ghaut (NE6/NS24/CC1)": 1790,
+        "HarbourFront (NE1/CC29)": 1795,
+        "Bishan (NS17/CC15)": 1779,
+    },
+};
+
+export default CONFIG;
+// end_of_file
+```
+
+```tsx
 // frontend/src/services/api.js
 
 import axios from 'axios';
@@ -2188,7 +2209,9 @@ import axios from 'axios';
 // NOTE: Ensure this is the correct backend URL
 // For development: use localhost:8000
 // For production: use https://resume-smith-api.onrender.com
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000'; 
+const API_BASE = process.env.NODE_ENV === 'production'
+  ? 'https://resume-smith-api.onrender.com'
+  : 'http://localhost:8000'; 
 // External API for job search
 const JOBS_API_BASE = 'https://www.findsgjobs.com/apis/job/searchable';
 
@@ -2225,12 +2248,14 @@ export const analyzeResume = async (provider, resumeFile, jdText) => {
   return response.data;
 };
 
-// No change required for transformResume as it already uses jdText (string)
-export const transformResume = async (provider, resumeText, jdText, part1Analysis, userAnswers) => {
+// transformResume now includes job title and company name
+export const transformResume = async (provider, resumeText, jdText, jobTitle, company, part1Analysis, userAnswers) => {
   const formData = new FormData();
   formData.append('provider', provider);
   formData.append('resume_text', resumeText);
   formData.append('jd_text', jdText);
+  formData.append('job_title', jobTitle || '');
+  formData.append('company', company || '');
   formData.append('part_1_analysis', part1Analysis);
   formData.append('user_answers', userAnswers);
   

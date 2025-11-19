@@ -170,18 +170,18 @@ async def analyze_resume(
             os.remove(temp_resume_path)
 
 
-# The /api/transform endpoint requires NO CHANGES as it already accepts 
-# 'jd_text' as a string form field.
+# The /api/transform endpoint now includes job_title and company parameters
 @app.post("/api/transform")
 async def transform_resume(
     provider: str = Form(...),
     resume_text: str = Form(...),
     jd_text: str = Form(...),
+    job_title: str = Form(default=''),
+    company: str = Form(default=''),
     part_1_analysis: str = Form(...),
     user_answers: str = Form(...)
 ):
-    # ... (rest of the /api/transform logic remains unchanged) ...
-    # This logic already correctly uses jd_text (string)
+    # This endpoint now accepts job_title and company for enhanced context in the LLM prompt
     
     if not CLIENT_AVAILABLE:
         raise HTTPException(status_code=503, detail="LLM API client is not configured.")
@@ -190,7 +190,9 @@ async def transform_resume(
         transformed_text = run_part_2_transformation(
             provider, 
             resume_text, 
-            jd_text, 
+            jd_text,
+            job_title,
+            company,
             part_1_analysis, 
             user_answers
         )
@@ -510,7 +512,7 @@ def run_part_1_analysis(provider, resume_text, jd_text):
         logger.error(error_msg)
         return error_msg
 
-def run_part_2_transformation(provider, resume_text, jd_text, part_1_analysis, user_answers):
+def run_part_2_transformation(provider, resume_text, jd_text, job_title, company, part_1_analysis, user_answers):
     """Calls the LLM to execute Phase 2 - Part 2 transformation."""
     # Normalize provider name to lowercase
     provider = provider.lower()
@@ -520,9 +522,19 @@ def run_part_2_transformation(provider, resume_text, jd_text, part_1_analysis, u
     
     model_name = GEMINI_MODEL if provider == 'gemini' else GROQ_MODEL
 
+    # Add job title and company to the prompt if they exist
+    job_context = ""
+    if job_title:
+        job_context += f"[TARGET JOB TITLE START]\n{job_title}\n[TARGET JOB TITLE END]\n"
+    if company:
+        job_context += f"[TARGET COMPANY START]\n{company}\n[TARGET COMPANY END]\n"
+
+
     prompt = f"""
     --- EXECUTE PHASE 2 — PART 2 ---
     Perform the full resume transformation and output the final draft ONLY.
+
+    {job_context}
 
     [JOB DESCRIPTION START]
     {jd_text}

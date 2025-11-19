@@ -16,8 +16,8 @@ const getDisplayName = (code, configKey) => {
 
 const PER_PAGE_COUNT = 5; // Define the fixed number of results per page
 
-// ACCEPTING new props: selectedCompany and fullJdText
-const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJdText, onDeselect }) => {
+// CRITICAL CHANGE: Added new prop isJdFileUploaded
+const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJdText, onDeselect, isJdFileUploaded }) => {
     const [keyword, setKeyword] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(CONFIG.JOB_CATEGORIES["All Categories"]);
     const [selectedEmployment, setSelectedEmployment] = useState(CONFIG.EMPLOYMENT_TYPES["All Types"]);
@@ -41,6 +41,9 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
 
     // Function to handle the actual API call
     const fetchJobs = async (pageToFetch) => { 
+        // Prevent fetching if a file is already uploaded
+        if (isJdFileUploaded) return;
+
         setLoading(true);
         setError(null);
 
@@ -74,7 +77,8 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
             
             // Only set an error if the actual jobResults array is empty.
             if (jobResults.length === 0 && pageToFetch === 1) {
-                 setError("No jobs found matching your criteria.");
+                // Clear existing error if we're searching again
+                setError("No jobs found matching your criteria.");
             }
             
         } catch (err) {
@@ -90,27 +94,34 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
     const handleSearch = async (e) => {
         e.preventDefault();
         
+        // Prevent searching if a JD file is uploaded
+        if (isJdFileUploaded) return;
+        
+        // Clear previous state
         setResults([]); 
         setTotalResults(0);
         setLastFetchedCount(0);
         setCurrentPage(1); 
         setIsInitialSearch(true); 
+        setError(null);
         
         await fetchJobs(1); // Fetch page 1
     };
 
     // V2: HANDLER for clicking a table row to select and highlight
     const handleRowClick = (jobItem, index) => {
+        // Prevent selection if a JD file is uploaded
+        if (isJdFileUploaded) return;
+
         // 1. Highlight the row
         setHighlightedJobIndex(index); 
 
         // 2. Select the job and pass data to the parent component
         const title = jobItem.job?.Title || 'Selected Job';
         const company = jobItem.company?.CompanyName || 'N/A';
-        // Corrected variable usage from 'item' to 'jobItem' (Fix from previous turn)
         const description = jobItem.job?.JobDescription || ''; 
         
-        // This call updates selectedJdTitle in the parent component (App.jsx), triggering the screen change
+        // This call updates selectedJdTitle in the parent component (App.jsx)
         setJdText(description, title, company); 
     };
 
@@ -137,23 +148,22 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
     const endRange = startRange > 0 ? startRange + results.length - 1 : 0;
 
 
+    // --- RENDERING LOGIC ---
+
+    // Case 1: Job selected from search (Text JD is present)
     if (selectedJdTitle) {
         // Display the selected job confirmation
-        // MODIFIED BLOCK START: Now uses selectedCompany and fullJdText
-        
-        // Create a snippet using the full JD text passed from the parent
         const snippet = fullJdText.substring(0, 200) + (fullJdText.length > 200 ? '...' : '');
 
         return (
             <div className="search-status-box selected">
-                <h3>✅ Job Selected</h3>
+                <h3>✅ Job Selected (via Search)</h3>
                 
                 <div className="selected-job-details">
                     <p><strong>Job Title:</strong> {selectedJdTitle}</p>
                     <p><strong>Company:</strong> {selectedCompany}</p>
                     <p>
                         <strong>JD Snippet:</strong> 
-                        {/* Re-using dangerouslySetInnerHTML to render the formatted snippet */}
                         <span 
                             dangerouslySetInnerHTML={{ __html: snippet }} 
                             style={{ display: 'block', marginTop: '5px' }}
@@ -164,7 +174,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
                 <button 
                     onClick={() => {
                         setHighlightedJobIndex(null); // Clear highlight on deselect
-                        onDeselect(); // Clear parent selection
+                        onDeselect(); // Clear parent selection (App.jsx)
                     }} 
                     className="button deselect"
                 >
@@ -172,9 +182,19 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
                 </button>
             </div>
         );
-        // MODIFIED BLOCK END
     }
-
+    
+    // Case 2: JD File uploaded (Disable search and show status)
+    if (isJdFileUploaded) {
+        return (
+            <div className="search-status-box disabled-by-file">
+                <h3>Job Search Disabled</h3>
+                <p>A Job Description file has been uploaded below. To use the job search feature, please first clear the uploaded file in Step 2.</p>
+            </div>
+        );
+    }
+    
+    // Case 3: No job selected and no file uploaded (Show search interface)
     return (
         <div className="job-search-container">
             <h3>1. Search for a Job Description (Click Row to Select)</h3>

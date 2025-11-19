@@ -26,18 +26,28 @@ export const searchJobs = async (params) => {
 };
 // --------------------------------------------------------
 
-
-export const analyzeResume = async (provider, resumeFile, jdText) => {
+/**
+ * Calls the backend /api/analyze endpoint to perform Part 1 analysis.
+ * * @param {string} provider - The selected LLM provider ('gemini' or 'groq').
+ * @param {File} resumeFile - The user's resume file object.
+ * @param {string} jdText - The Job Description text (from search/select).
+ * @param {File} [jdFile=null] - Optional Job Description file object (from upload).
+ */
+export const analyzeResume = async (provider, resumeFile, jdText, jdFile = null) => {
   const formData = new FormData();
   formData.append('provider', provider);
   formData.append('resume', resumeFile);
   
-  // CRITICAL CHANGE: Append jdText as a string form field
-  formData.append('jd_text', jdText); 
+  // CRITICAL CHANGE: Conditionally append EITHER jd_text or jd_file
+  if (jdFile) {
+    formData.append('jd_file', jdFile); // If file is present, send it as jd_file
+  } else {
+    formData.append('jd_text', jdText || ''); // Otherwise, send the text string (may be empty if no job selected)
+  }
   
   const response = await api.post('/api/analyze', formData, {
     headers: {
-      // Still need 'multipart/form-data' because of the resume file
+      // Must be 'multipart/form-data' because we are sending at least two files (resume and possibly jdFile)
       'Content-Type': 'multipart/form-data', 
     },
   });
