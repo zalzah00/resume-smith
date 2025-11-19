@@ -30,7 +30,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
     // Tracks how many items were returned in the last API call.
     const [lastFetchedCount, setLastFetchedCount] = useState(0); 
     
-    // V2: NEW STATE for row selection
+    // V2: State for row selection
     const [highlightedJobIndex, setHighlightedJobIndex] = useState(null); 
     
     const [isInitialSearch, setIsInitialSearch] = useState(true); 
@@ -85,7 +85,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         }
     }
 
-    // Handler for form submission (unchanged)
+    // Handler for form submission
     const handleSearch = async (e) => {
         e.preventDefault();
         
@@ -98,7 +98,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         await fetchJobs(1); // Fetch page 1
     };
 
-    // V2: NEW HANDLER for clicking a table row to select and highlight
+    // V2: HANDLER for clicking a table row to select and highlight
     const handleRowClick = (jobItem, index) => {
         // 1. Highlight the row
         setHighlightedJobIndex(index); 
@@ -106,18 +106,18 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         // 2. Select the job and pass data to the parent component
         const title = jobItem.job?.Title || 'Selected Job';
         const company = jobItem.company?.CompanyName || 'N/A';
-        const description = jobItem.job?.JobDescription || '';
+        const description = item.job?.JobDescription || '';
         
         setJdText(description, title, company);
     };
 
-    // Handler for the "Next Page" button (unchanged)
+    // Handler for the "Next Page" button
     const handleNextPage = () => {
         const nextPage = currentPage + 1;
         fetchJobs(nextPage);
     };
 
-    // Handler for the "Previous Page" button (unchanged)
+    // Handler for the "Previous Page" button
     const handlePrevPage = () => {
         const prevPage = currentPage - 1;
         if (prevPage >= 1) {
@@ -125,7 +125,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         }
     };
     
-    // Derived state (unchanged)
+    // Derived state
     const hasNextPage = lastFetchedCount === PER_PAGE_COUNT;
     const hasPrevPage = currentPage > 1;
     const isSearchingFirstPage = isInitialSearch && loading; 
@@ -135,7 +135,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
 
 
     if (selectedJdTitle) {
-        // Updated to clear the highlight when changing the job
+        // Display the selected job confirmation
         return (
             <div className="search-status-box selected">
                 <h3>✅ Job Selected</h3>
@@ -219,9 +219,11 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
                                             <br />
                                             <span className="company-name">{item.company?.CompanyName || 'N/A'}</span>
                                         </td>
-                                        <td className="jd-snippet-cell">
-                                            {jdSnippet}
-                                        </td>
+                                        {/* FIX: Use dangerouslySetInnerHTML to render HTML formatted text */}
+                                        <td 
+                                            className="jd-snippet-cell"
+                                            dangerouslySetInnerHTML={{ __html: jdSnippet }} 
+                                        />
                                     </tr>
                                 );
                             })}
