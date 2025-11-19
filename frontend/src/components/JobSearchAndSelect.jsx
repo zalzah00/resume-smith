@@ -27,7 +27,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
     const [currentPage, setCurrentPage] = useState(1); 
     const [totalResults, setTotalResults] = useState(0); 
     
-    // NEW STATE: Tracks how many items were returned in the last API call.
+    // Tracks how many items were returned in the last API call.
     const [lastFetchedCount, setLastFetchedCount] = useState(0); 
     
     const [isInitialSearch, setIsInitialSearch] = useState(true); 
@@ -36,11 +36,9 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
     
 
     // Function to handle the actual API call
-    const fetchJobs = async (pageToFetch, clearResults) => {
+    const fetchJobs = async (pageToFetch) => { // Removed 'clearResults' as the logic handles clear vs. replace
         setLoading(true);
-        if (clearResults) { 
-            setError(null);
-        }
+        setError(null);
 
         const params = {
             page: pageToFetch,
@@ -59,23 +57,19 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
             const jobResults = data?.data?.result || [];
             const newTotal = data?.data?.total_records || 0;
 
-            if (clearResults) {
-                // Initial search or new search
-                setResults(jobResults);
-            } else {
-                // Load More button click - Append results
-                setResults(prevResults => [...prevResults, ...jobResults]);
-            }
-            
+            // --- REVISED PAGINATION LOGIC ---
+            // TRADITIONAL PAGINATION: Always REPLACE results, never append.
+            setResults(jobResults);
+            // --------------------------------
+
             // Update successful fetch states
             setCurrentPage(pageToFetch); 
             setTotalResults(newTotal);
-            // This is the key fix: record how many items were actually returned
             setLastFetchedCount(jobResults.length); 
             
 
             // Only set an error if the actual jobResults array is empty.
-            if (jobResults.length === 0 && clearResults) {
+            if (jobResults.length === 0 && pageToFetch === 1) {
                  setError("No jobs found matching your criteria.");
             }
             
@@ -88,23 +82,31 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         }
     }
 
-    // Handler for form submission (Always starts a new search, clearing previous results)
+    // Handler for form submission (Always starts a new search, fetching page 1)
     const handleSearch = async (e) => {
         e.preventDefault();
         
         setResults([]); // Clear results immediately
         setTotalResults(0);
-        setLastFetchedCount(0); // Reset fetch count
-        setCurrentPage(1); // Ensure start from page 1
+        setLastFetchedCount(0);
+        setCurrentPage(1); 
         setIsInitialSearch(true); 
         
-        await fetchJobs(1, true); // Fetch page 1, clear existing results
+        await fetchJobs(1); // Fetch page 1
     };
 
-    // Handler for the "Load More" button
-    const handleLoadMore = () => {
+    // Handler for the "Next Page" button
+    const handleNextPage = () => {
         const nextPage = currentPage + 1;
-        fetchJobs(nextPage, false); // Fetch next page, DO NOT clear results
+        fetchJobs(nextPage);
+    };
+
+    // Handler for the "Previous Page" button
+    const handlePrevPage = () => {
+        const prevPage = currentPage - 1;
+        if (prevPage >= 1) {
+            fetchJobs(prevPage);
+        }
     };
 
 
@@ -113,23 +115,26 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
         const company = jobItem.company?.CompanyName || 'N/A';
         const description = jobItem.job?.JobDescription || '';
         
-        // Pass the raw JobDescription text, job title, and company to the parent component (App.jsx)
         setJdText(description, title, company);
-        setResults([]); // Clear results after selection
-        setTotalResults(0); // Clear total results count
-        setCurrentPage(1); // Reset page state
+        setResults([]); 
+        setTotalResults(0); 
+        setCurrentPage(1); 
     };
 
-    // FIXED LOGIC: Show "Load More" if the last fetch returned a full page size (PER_PAGE_COUNT)
-    // This overrides the unreliable 'totalResults' count.
-    const hasMoreResults = lastFetchedCount === PER_PAGE_COUNT;
+    // Show "Next Page" button if the last fetch returned a full page size (5)
+    const hasNextPage = lastFetchedCount === PER_PAGE_COUNT;
+    const hasPrevPage = currentPage > 1;
     
     // Determine if we are loading the initial page 
     const isSearchingFirstPage = isInitialSearch && loading; 
     
     // Ensure the displayed total is never less than the number of jobs currently displayed
-    // In case totalResults is 0 but we have 5 results, this will show 5.
     const displayTotalResults = Math.max(results.length, totalResults);
+    
+    // Calculate the range of jobs being shown
+    const startRange = results.length > 0 ? (currentPage - 1) * PER_PAGE_COUNT + 1 : 0;
+    const endRange = startRange > 0 ? startRange + results.length - 1 : 0;
+
 
     if (selectedJdTitle) {
         // Display the selected job confirmation
@@ -184,8 +189,11 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
             
             {results.length > 0 && (
                 <div className="search-results">
-                    {/* Use results.length here, and a MAX of results.length and totalResults for the total count */}
-                    <h4>Showing {results.length} of {displayTotalResults === results.length ? 'many' : displayTotalResults} Results:</h4>
+                    {/* Updated Header for Traditional Pagination */}
+                    <h4>
+                        Showing {startRange}-{endRange} of {displayTotalResults === results.length && !hasNextPage ? results.length : 'many'} Results:
+                    </h4>
+
                     {results.map((item, index) => (
                         <div key={index} className="job-card">
                             <div className="job-details">
@@ -201,19 +209,29 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, onDeselect }) => {
                         </div>
                     ))}
                     
-                    {/* Load More Button - appears if the last fetch returned a full page */}
-                    {hasMoreResults && (
+                    {/* Pagination Controls */}
+                    <div className="pagination-controls">
                         <button 
-                            onClick={handleLoadMore} 
-                            disabled={loading && !isSearchingFirstPage} 
-                            className="button load-more-button"
+                            onClick={handlePrevPage} 
+                            disabled={loading || !hasPrevPage} 
+                            className="button prev-button"
                         >
-                            {loading && !isSearchingFirstPage ? 'Loading More...' : `Load More Jobs (Page ${currentPage + 1})`}
+                            {'< Previous Page'}
                         </button>
-                    )}
+                        <span className="page-status">
+                            Page {currentPage}
+                        </span>
+                        <button 
+                            onClick={handleNextPage} 
+                            disabled={loading || !hasNextPage} 
+                            className="button next-button"
+                        >
+                            {loading && !isSearchingFirstPage ? 'Loading...' : 'Next Page >'}
+                        </button>
+                    </div>
 
                     {/* Display message when all known results are loaded */}
-                    {!hasMoreResults && results.length > 0 && (
+                    {!hasNextPage && results.length > 0 && (
                         <div className="search-status-box all-loaded">
                             <p>All visible results loaded.</p>
                         </div>
