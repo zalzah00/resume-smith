@@ -6,7 +6,7 @@ import React from 'react';
 const ALLOWED_EXTENSIONS = ['.docx', '.pdf', '.txt'];
 
 const FileUpload = ({ provider, setProvider, resumeFile, setResumeFile, jdFile, setJdFile, onAnalyze, loading }) => {
-  
+
   const isValidFile = (file) => {
     if (!file) return false;
     const extension = '.' + file.name.split('.').pop().toLowerCase();
@@ -29,7 +29,7 @@ const FileUpload = ({ provider, setProvider, resumeFile, setResumeFile, jdFile, 
   return (
     <div style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', marginBottom: '20px' }}>
       <h2>1. Upload Files</h2>
-      
+
       <div style={{ marginBottom: '15px' }}>
         <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
           LLM Provider:
@@ -99,7 +99,7 @@ const FileUpload = ({ provider, setProvider, resumeFile, setResumeFile, jdFile, 
         disabled={!provider || !resumeFile || !jdFile || loading}
         style={{
           padding: '10px 20px',
-          backgroundColor: '#007bff',
+          backgroundColor: '#3b82f6',
           color: 'white',
           border: 'none',
           borderRadius: '4px',

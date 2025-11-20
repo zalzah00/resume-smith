@@ -1,5 +1,11 @@
 /* --- V2 Tabular Display Styles --- */
 
+:root {
+    --primary-color: #1e3a8a;
+    --primary-light: #3b82f6;
+    --primary-dark: #1e40af;
+}
+
 .job-results-table {
     width: 100%;
     border-collapse: collapse;
@@ -7,7 +13,7 @@
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.job-results-table th, 
+.job-results-table th,
 .job-results-table td {
     border: 1px solid #ddd;
     padding: 10px 15px;
@@ -28,13 +34,16 @@
 
 .job-results-table tbody tr:hover {
     cursor: pointer;
-    background-color: #e6f7ff; /* Light blue hover */
+    background-color: #e6f7ff;
+    /* Light blue hover */
 }
 
 /* Highlight for the currently selected job */
 .job-results-table tbody tr.selected-row {
-    background-color: #d0e0ff; /* Distinct blue highlight */
-    border-left: 5px solid #0056b3; /* Stronger border for emphasis */
+    background-color: #d0e0ff;
+    /* Distinct blue highlight */
+    border-left: 5px solid var(--primary-dark);
+    /* Stronger border for emphasis */
 }
 
 .job-results-table .company-name {
@@ -67,7 +76,7 @@
 /* Ensure buttons in controls look consistent */
 .pagination-controls .button {
     padding: 8px 15px;
-    background-color: #007bff;
+    background-color: var(--primary-light);
     color: white;
     border: none;
     border-radius: 4px;
@@ -76,12 +85,62 @@
 }
 
 .pagination-controls .button:hover:not(:disabled) {
-    background-color: #0056b3;
+    background-color: var(--primary-dark);
 }
 
 .pagination-controls .button:disabled {
     background-color: #ccc;
     cursor: not-allowed;
+}
+
+/* Search Button Styling - Matches Start Analysis Button */
+.search-button {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.search-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.search-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Change Job Button Styling - Matches Other Primary Buttons */
+.button.deselect {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.button.deselect:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
 /* You may need to keep or adjust existing styles for .job-search-container, .search-form, etc. */

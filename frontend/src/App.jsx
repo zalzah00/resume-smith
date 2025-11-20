@@ -159,7 +159,7 @@ const App = () => {
           {/* Mode Toggle - Segmented Control */}
           <div style={{
             display: 'inline-flex',
-            border: '2px solid #007bff',
+            border: '2px solid #3b82f6',
             borderRadius: '8px',
             overflow: 'hidden',
             marginBottom: '15px'
@@ -170,8 +170,8 @@ const App = () => {
               style={{
                 padding: '10px 20px',
                 border: 'none',
-                backgroundColor: jdMode === 'search' ? '#007bff' : 'white',
-                color: jdMode === 'search' ? 'white' : '#007bff',
+                backgroundColor: jdMode === 'search' ? '#3b82f6' : 'white',
+                color: jdMode === 'search' ? 'white' : '#3b82f6',
                 cursor: loading ? 'not-allowed' : 'pointer',
                 fontWeight: jdMode === 'search' ? 'bold' : 'normal',
                 transition: 'all 0.2s',
@@ -186,9 +186,9 @@ const App = () => {
               style={{
                 padding: '10px 20px',
                 border: 'none',
-                borderLeft: '2px solid #007bff',
-                backgroundColor: jdMode === 'upload' ? '#007bff' : 'white',
-                color: jdMode === 'upload' ? 'white' : '#007bff',
+                borderLeft: '2px solid #3b82f6',
+                backgroundColor: jdMode === 'upload' ? '#3b82f6' : 'white',
+                color: jdMode === 'upload' ? 'white' : '#3b82f6',
                 cursor: loading ? 'not-allowed' : 'pointer',
                 fontWeight: jdMode === 'upload' ? 'bold' : 'normal',
                 transition: 'all 0.2s',
