@@ -50,7 +50,7 @@ body {
   padding: 14px 16px; /* further reduced vertical padding for a tighter header */
   text-align: center;
   box-shadow: var(--shadow-lg);
-  margin-bottom: 24px;
+  margin-bottom: 0; /* removed gap for tight notification banner */
 }
 
 .App-header h1 {
