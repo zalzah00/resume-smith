@@ -110,21 +110,23 @@ async def search_jobs_proxy(
 async def analyze_resume(
     provider: str = Form(...),
     resume: UploadFile = File(...),
-    jd_text: str = Form(...) # <--- JD content is now a string from the frontend
+    jd_text: str = Form(None),  # Optional - used when job is searched
+    jd_file: UploadFile = File(None)  # Optional - used when JD is uploaded
 ):
     if not CLIENT_AVAILABLE:
         raise HTTPException(status_code=503, detail="LLM API client is not configured.")
 
     if not resume:
         raise HTTPException(status_code=400, detail="Resume file is required.")
-        
-    if not jd_text.strip(): # Check if the passed text is empty
-        raise HTTPException(status_code=400, detail="Job Description text is empty. Please select a job.")
-
+    
+    # Validate that either jd_text or jd_file is provided
+    if not jd_text and not jd_file:
+        raise HTTPException(status_code=400, detail="Either Job Description text or file is required.")
 
     temp_resume_path = None
+    temp_jd_path = None
     try:
-        # --- 1. Extract Text from Resume File (REMAINS THE SAME) ---
+        # --- 1. Extract Text from Resume File ---
         extension = get_file_extension(resume.filename)
         
         # Save resume file temporarily
@@ -137,18 +139,43 @@ async def analyze_resume(
 
         if not resume_text:
             raise HTTPException(status_code=400, detail="Could not extract text from resume file. Please check file format.")
-            
-        # --- 2. JD Text is already available (CRITICAL CHANGE) ---
-        # jd_text variable now holds the content, no file handling needed.
         
-        # --- 3. Run Analysis (REMAINS THE SAME) ---
+        # --- 2. Get JD Text (either from file or from text parameter) ---
+        if jd_file:
+            # Extract text from uploaded JD file
+            jd_extension = get_file_extension(jd_file.filename)
+            
+            # Validate JD file extension
+            allowed_extensions = {".docx", ".pdf", ".txt"}
+            if jd_extension not in allowed_extensions:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Job description file error: Unsupported file type {jd_extension}. Must be .docx, .pdf, or .txt"
+                )
+            
+            # Save JD file temporarily
+            with tempfile.NamedTemporaryFile(delete=False, suffix=jd_extension) as tmp:
+                jd_content = await jd_file.read()
+                tmp.write(jd_content)
+                temp_jd_path = tmp.name
+            
+            jd_text = extract_text_from_file(temp_jd_path, jd_extension)
+            
+            if not jd_text:
+                raise HTTPException(status_code=400, detail="Could not extract text from JD file. Please check file format.")
+        else:
+            # Use the provided jd_text from search
+            if not jd_text.strip():
+                raise HTTPException(status_code=400, detail="Job Description text is empty. Please select a job.")
+        
+        # --- 3. Run Analysis ---
         analysis_result = run_part_1_analysis(provider, resume_text, jd_text)
 
         return JSONResponse(content={
             "status": "success",
             "part_1_analysis": analysis_result,
             "original_resume_text": resume_text,
-            "job_description_text": jd_text # return the JD text for safety/debugging
+            "job_description_text": jd_text
         })
 
     except HTTPException:
@@ -159,6 +186,9 @@ async def analyze_resume(
     finally:
         if temp_resume_path and os.path.exists(temp_resume_path):
             os.remove(temp_resume_path)
+        if temp_jd_path and os.path.exists(temp_jd_path):
+            os.remove(temp_jd_path)
+
 
 
 # The /api/transform endpoint now includes job_title and company parameters

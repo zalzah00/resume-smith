@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { searchJobs } from '../services/api';
-import CONFIG from '../config/jobConfig'; 
+import CONFIG from '../config/jobConfig';
 import './JobSearchAndSelect.css';
 
 // Helper function to get the display name for a code (for status message)
@@ -22,25 +22,25 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
     const [selectedCategory, setSelectedCategory] = useState(CONFIG.JOB_CATEGORIES["All Categories"]);
     const [selectedEmployment, setSelectedEmployment] = useState(CONFIG.EMPLOYMENT_TYPES["All Types"]);
     const [selectedMRT, setSelectedMRT] = useState(CONFIG.MRT_STATIONS["All Stations"]);
-    
+
     // State for Pagination
     const [results, setResults] = useState([]);
-    const [currentPage, setCurrentPage] = useState(1); 
-    const [totalResults, setTotalResults] = useState(0); 
-    
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalResults, setTotalResults] = useState(0);
+
     // Tracks how many items were returned in the last API call.
-    const [lastFetchedCount, setLastFetchedCount] = useState(0); 
-    
+    const [lastFetchedCount, setLastFetchedCount] = useState(0);
+
     // V2: State for row selection
-    const [highlightedJobIndex, setHighlightedJobIndex] = useState(null); 
-    
-    const [isInitialSearch, setIsInitialSearch] = useState(true); 
+    const [highlightedJobIndex, setHighlightedJobIndex] = useState(null);
+
+    const [isInitialSearch, setIsInitialSearch] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    
+
 
     // Function to handle the actual API call
-    const fetchJobs = async (pageToFetch) => { 
+    const fetchJobs = async (pageToFetch) => {
         setLoading(true);
         setError(null);
 
@@ -57,26 +57,26 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
         try {
             console.log('Searching with params:', params);
             const data = await searchJobs(params);
-            
+
             const jobResults = data?.data?.result || [];
             const newTotal = data?.data?.total_records || 0;
 
             // TRADITIONAL PAGINATION: Always REPLACE results, never append.
             setResults(jobResults);
-            
+
             // V2: Reset highlight when loading new page
-            setHighlightedJobIndex(null); 
+            setHighlightedJobIndex(null);
 
             // Update successful fetch states
-            setCurrentPage(pageToFetch); 
+            setCurrentPage(pageToFetch);
             setTotalResults(newTotal);
-            setLastFetchedCount(jobResults.length); 
-            
+            setLastFetchedCount(jobResults.length);
+
             // Only set an error if the actual jobResults array is empty.
             if (jobResults.length === 0 && pageToFetch === 1) {
-                 setError("No jobs found matching your criteria.");
+                setError("No jobs found matching your criteria.");
             }
-            
+
         } catch (err) {
             console.error('Search error:', err);
             setError(`Failed to fetch jobs: ${err.message}`);
@@ -89,29 +89,29 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
     // Handler for form submission
     const handleSearch = async (e) => {
         e.preventDefault();
-        
-        setResults([]); 
+
+        setResults([]);
         setTotalResults(0);
         setLastFetchedCount(0);
-        setCurrentPage(1); 
-        setIsInitialSearch(true); 
-        
+        setCurrentPage(1);
+        setIsInitialSearch(true);
+
         await fetchJobs(1); // Fetch page 1
     };
 
     // V2: HANDLER for clicking a table row to select and highlight
     const handleRowClick = (jobItem, index) => {
         // 1. Highlight the row
-        setHighlightedJobIndex(index); 
+        setHighlightedJobIndex(index);
 
         // 2. Select the job and pass data to the parent component
         const title = jobItem.job?.Title || 'Selected Job';
         const company = jobItem.company?.CompanyName || 'N/A';
         // Corrected variable usage from 'item' to 'jobItem' (Fix from previous turn)
-        const description = jobItem.job?.JobDescription || ''; 
-        
+        const description = jobItem.job?.JobDescription || '';
+
         // This call updates selectedJdTitle in the parent component (App.jsx), triggering the screen change
-        setJdText(description, title, company); 
+        setJdText(description, title, company);
     };
 
     // Handler for the "Next Page" button
@@ -127,11 +127,11 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
             fetchJobs(prevPage);
         }
     };
-    
+
     // Derived state
     const hasNextPage = lastFetchedCount === PER_PAGE_COUNT;
     const hasPrevPage = currentPage > 1;
-    const isSearchingFirstPage = isInitialSearch && loading; 
+    const isSearchingFirstPage = isInitialSearch && loading;
     const displayTotalResults = Math.max(results.length, totalResults);
     const startRange = results.length > 0 ? (currentPage - 1) * PER_PAGE_COUNT + 1 : 0;
     const endRange = startRange > 0 ? startRange + results.length - 1 : 0;
@@ -140,32 +140,31 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
     if (selectedJdTitle) {
         // Display the selected job confirmation
         // MODIFIED BLOCK START: Now uses selectedCompany and fullJdText
-        
-        // Create a snippet using the full JD text passed from the parent
-        const snippet = fullJdText.substring(0, 200) + (fullJdText.length > 200 ? '...' : '');
+
+        // Display the full JD text passed from the parent
 
         return (
             <div className="search-status-box selected">
                 <h3>✅ Job Selected</h3>
-                
+
                 <div className="selected-job-details">
                     <p><strong>Job Title:</strong> {selectedJdTitle}</p>
                     <p><strong>Company:</strong> {selectedCompany}</p>
                     <p>
-                        <strong>JD Snippet:</strong> 
-                        {/* Re-using dangerouslySetInnerHTML to render the formatted snippet */}
-                        <span 
-                            dangerouslySetInnerHTML={{ __html: snippet }} 
+                        <strong>Job Description:</strong>
+                        {/* Re-using dangerouslySetInnerHTML to render the full JD */}
+                        <span
+                            dangerouslySetInnerHTML={{ __html: fullJdText }}
                             style={{ display: 'block', marginTop: '5px' }}
                         />
                     </p>
                 </div>
 
-                <button 
+                <button
                     onClick={() => {
                         setHighlightedJobIndex(null); // Clear highlight on deselect
                         onDeselect(); // Clear parent selection
-                    }} 
+                    }}
                     className="button deselect"
                 >
                     Change Job
@@ -177,7 +176,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
 
     return (
         <div className="job-search-container">
-            <h3>1. Search for a Job Description (Click Row to Select)</h3>
+            <h3>Search for a Job Description (Click Row to Select)</h3>
             <form onSubmit={handleSearch} className="search-form">
                 <input
                     type="text"
@@ -209,7 +208,7 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
             </form>
 
             {error && <div className="error-message">{error}</div>}
-            
+
             {results.length > 0 && (
                 <div className="search-results">
                     <h4>
@@ -220,21 +219,20 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
                     <table className="job-results-table">
                         <thead>
                             <tr>
-                                <th style={{width: '30%'}}>Job Title / Company</th>
-                                <th style={{width: '70%'}}>Job Description Snippet</th>
+                                <th style={{ width: '30%' }}>Job Title / Company</th>
+                                <th style={{ width: '70%' }}>Job Description</th>
                             </tr>
                         </thead>
                         <tbody>
                             {results.map((item, index) => {
                                 const jdText = item.job?.JobDescription || 'No description provided.';
-                                // Display first 200 characters as snippet
-                                const jdSnippet = jdText.substring(0, 200) + (jdText.length > 200 ? '...' : '');
+                                // Display full JD text
 
                                 return (
-                                    <tr 
-                                        key={index} 
+                                    <tr
+                                        key={index}
                                         className={index === highlightedJobIndex ? 'selected-row' : ''}
-                                        onClick={() => handleRowClick(item, index)} 
+                                        onClick={() => handleRowClick(item, index)}
                                     >
                                         <td>
                                             <strong>{item.job?.Title || 'N/A'}</strong>
@@ -242,21 +240,21 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
                                             <span className="company-name">{item.company?.CompanyName || 'N/A'}</span>
                                         </td>
                                         {/* Use dangerouslySetInnerHTML to render HTML formatted text */}
-                                        <td 
+                                        <td
                                             className="jd-snippet-cell"
-                                            dangerouslySetInnerHTML={{ __html: jdSnippet }} 
+                                            dangerouslySetInnerHTML={{ __html: jdText }}
                                         />
                                     </tr>
                                 );
                             })}
                         </tbody>
                     </table>
-                    
+
                     {/* Pagination Controls */}
                     <div className="pagination-controls">
-                        <button 
-                            onClick={handlePrevPage} 
-                            disabled={loading || !hasPrevPage} 
+                        <button
+                            onClick={handlePrevPage}
+                            disabled={loading || !hasPrevPage}
                             className="button prev-button"
                         >
                             {'< Previous Page'}
@@ -264,9 +262,9 @@ const JobSearchAndSelect = ({ setJdText, selectedJdTitle, selectedCompany, fullJ
                         <span className="page-status">
                             Page {currentPage}
                         </span>
-                        <button 
-                            onClick={handleNextPage} 
-                            disabled={loading || !hasNextPage} 
+                        <button
+                            onClick={handleNextPage}
+                            disabled={loading || !hasNextPage}
                             className="button next-button"
                         >
                             {loading && !isSearchingFirstPage ? 'Loading...' : 'Next Page >'}

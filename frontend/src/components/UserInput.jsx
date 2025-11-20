@@ -4,17 +4,17 @@ import React from 'react';
 import './UserInput.css';
 
 // CRITICAL CHANGE: Added isJdSelected prop to control analysis button
-const UserInput = ({ 
-    resumeFile, 
-    setResumeFile, 
-    provider, 
-    setProvider, 
-    onAnalyze, 
-    loading, 
-    error,
-    isJdSelected // New prop
+const UserInput = ({
+  resumeFile,
+  setResumeFile,
+  provider,
+  setProvider,
+  onAnalyze,
+  loading,
+  error,
+  isJdSelected // New prop
 }) => {
-  
+
   // Helper to determine if analysis button should be enabled
   const isAnalyzeDisabled = loading || !resumeFile || !isJdSelected;
 
@@ -22,11 +22,11 @@ const UserInput = ({
     <div className="user-input-container">
       <h3>2. Upload Resume and Select LLM</h3>
       <div className="input-group">
-        <label htmlFor="resume-upload">Upload Resume (PDF/DOCX):</label>
+        <label htmlFor="resume-upload">Upload Resume (.docx, .pdf, .txt):</label>
         <input
           id="resume-upload"
           type="file"
-          accept=".pdf,.docx"
+          accept=".pdf,.docx,.txt"
           onChange={(e) => setResumeFile(e.target.files[0])}
         />
         {resumeFile && <p className="file-status">✅ Resume: {resumeFile.name}</p>}
@@ -49,18 +49,18 @@ const UserInput = ({
       {error && <div className="error-message">{error}</div>}
 
       <div className="action-area">
-        <button 
-          onClick={onAnalyze} 
+        <button
+          onClick={onAnalyze}
           disabled={isAnalyzeDisabled}
           className="analyze-button"
         >
           {loading ? 'Analyzing...' : '🧠 Start Analysis (Part 1)'}
         </button>
       </div>
-      
+
       {/* Display messages if JD is missing */}
       {!isAnalyzeDisabled && !isJdSelected && (
-          <p className="status-message warning">Please select a job description in Step 1.</p>
+        <p className="status-message warning">Please select a job description in Step 1.</p>
       )}
     </div>
   );

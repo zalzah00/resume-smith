@@ -4,20 +4,24 @@ import React, { useState } from 'react';
 import './App.css';
 import UserInput from './components/UserInput';
 import AnalysisResults from './components/AnalysisResults';
-import JobSearchAndSelect from './components/JobSearchAndSelect'; 
+import JobSearchAndSelect from './components/JobSearchAndSelect';
+import JDUpload from './components/JDUpload';
 import { analyzeResume, transformResume } from './services/api';
 
 const App = () => {
   const [resumeFile, setResumeFile] = useState(null);
-  // Replaced jdFile state with jdText
   const [jdText, setJdText] = useState('');
-  const [selectedJdTitle, setSelectedJdTitle] = useState(''); // To display selected job name
-  const [selectedCompany, setSelectedCompany] = useState(''); // Store company name for LLM prompt
+  const [selectedJdTitle, setSelectedJdTitle] = useState('');
+  const [selectedCompany, setSelectedCompany] = useState('');
   const [provider, setProvider] = useState('gemini');
   const [analysis, setAnalysis] = useState(null);
   const [transformedResume, setTransformedResume] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // New state for JD mode and file upload
+  const [jdMode, setJdMode] = useState('search'); // 'search' or 'upload'
+  const [jdFile, setJdFile] = useState(null);
 
   // New setter function to handle text, title, and company
   const handleSetJdText = (text, title, company) => {
@@ -25,7 +29,7 @@ const App = () => {
     setSelectedJdTitle(title);
     setSelectedCompany(company || '');
   };
-  
+
   // New deselect function
   const handleDeselect = () => {
     setJdText('');
@@ -39,21 +43,48 @@ const App = () => {
     setAnalysis(null);
     setTransformedResume(null);
 
-    // CRITICAL CHANGE: Check for jdText instead of jdFile
-    if (!provider || !resumeFile || !jdText) {
-      setError('Please select an LLM, upload a resume, and select a Job Description.');
+    // Validate based on mode
+    if (!provider || !resumeFile) {
+      setError('Please select an LLM and upload a resume.');
+      return;
+    }
+
+    if (jdMode === 'search' && !jdText) {
+      setError('Please select a Job Description from search.');
+      return;
+    }
+
+    if (jdMode === 'upload' && !jdFile) {
+      setError('Please upload a Job Description file.');
       return;
     }
 
     setLoading(true);
     try {
-      // CRITICAL CHANGE: Pass jdText string instead of jdFile object
-      const result = await analyzeResume(provider, resumeFile, jdText);
-      // Extract the analysis markdown from the response
+      // Pass jdFile when in upload mode, otherwise pass jdText
+      const result = await analyzeResume(
+        provider,
+        resumeFile,
+        jdText,
+        jdMode === 'upload' ? jdFile : null
+      );
+
       setAnalysis({
         part_1_analysis: result.part_1_analysis,
         original_resume_text: result.original_resume_text,
       });
+
+      // CRITICAL FIX: Store the extracted JD text from the response
+      // This is needed for the transform endpoint
+      if (jdMode === 'upload' && result.job_description_text) {
+        setJdText(result.job_description_text);
+      }
+
+      // Set title and company to <see resume> if file was uploaded
+      if (jdMode === 'upload') {
+        setSelectedJdTitle('<see resume>');
+        setSelectedCompany('<see resume>');
+      }
     } catch (err) {
       setError(`Analysis failed: ${err.message}. Check the backend API.`);
     } finally {
@@ -88,29 +119,80 @@ const App = () => {
       <header className="App-header">
         <h1>Resume Transformer ✨</h1>
       </header>
-      
-      <main className="App-main">
-        {/* Job Search & Select Component - ADDING new props */}
-        <JobSearchAndSelect 
-            setJdText={handleSetJdText}
-            selectedJdTitle={selectedJdTitle}
-            onDeselect={handleDeselect}
-            selectedCompany={selectedCompany} // NEW
-            fullJdText={jdText}               // NEW
-        />
 
-        <UserInput 
-          // Passed resumeFile and setResumeFile (NO CHANGE)
+      <main className="App-main">
+        {/* Section 1: JD Mode Toggle and Input */}
+        <div style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', marginBottom: '20px' }}>
+          <h3>1. Job Description</h3>
+
+          {/* Mode Toggle - Segmented Control */}
+          <div style={{
+            display: 'inline-flex',
+            border: '2px solid #007bff',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            marginBottom: '15px'
+          }}>
+            <button
+              onClick={() => setJdMode('search')}
+              disabled={loading}
+              style={{
+                padding: '10px 20px',
+                border: 'none',
+                backgroundColor: jdMode === 'search' ? '#007bff' : 'white',
+                color: jdMode === 'search' ? 'white' : '#007bff',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontWeight: jdMode === 'search' ? 'bold' : 'normal',
+                transition: 'all 0.2s',
+                opacity: loading ? 0.6 : 1
+              }}
+            >
+              Search in FindSGJobs
+            </button>
+            <button
+              onClick={() => setJdMode('upload')}
+              disabled={loading}
+              style={{
+                padding: '10px 20px',
+                border: 'none',
+                borderLeft: '2px solid #007bff',
+                backgroundColor: jdMode === 'upload' ? '#007bff' : 'white',
+                color: jdMode === 'upload' ? 'white' : '#007bff',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontWeight: jdMode === 'upload' ? 'bold' : 'normal',
+                transition: 'all 0.2s',
+                opacity: loading ? 0.6 : 1
+              }}
+            >
+              Upload JD
+            </button>
+          </div>
+
+          {/* Conditional Rendering based on mode */}
+          {jdMode === 'search' ? (
+            <JobSearchAndSelect
+              setJdText={handleSetJdText}
+              selectedJdTitle={selectedJdTitle}
+              onDeselect={handleDeselect}
+              selectedCompany={selectedCompany}
+              fullJdText={jdText}
+            />
+          ) : (
+            <JDUpload
+              jdFile={jdFile}
+              setJdFile={setJdFile}
+              loading={loading}
+            />
+          )}
+        </div>
+
+        {/* Section 2: Resume Upload */}
+        <UserInput
           resumeFile={resumeFile}
           setResumeFile={setResumeFile}
-          
-          // LLM Provider (NO CHANGE)
           provider={provider}
           setProvider={setProvider}
-          
-          // New requirement to check before allowing analysis
-          isJdSelected={!!jdText}
-          
+          isJdSelected={jdMode === 'search' ? !!jdText : !!jdFile}
           onAnalyze={handleAnalyze}
           loading={loading}
           error={error}

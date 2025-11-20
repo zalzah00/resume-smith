@@ -7,13 +7,13 @@ import axios from 'axios';
 // For production: use https://resume-smith-api.onrender.com
 const API_BASE = process.env.NODE_ENV === 'production'
   ? 'https://resume-smith-api.onrender.com'
-  : 'http://localhost:8000'; 
+  : 'http://localhost:8000';
 // External API for job search
 const JOBS_API_BASE = 'https://www.findsgjobs.com/apis/job/searchable';
 
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 300000, 
+  timeout: 300000,
 });
 
 // --- Job Search API Call (via backend proxy to bypass CORS) ---
@@ -27,18 +27,21 @@ export const searchJobs = async (params) => {
 // --------------------------------------------------------
 
 
-export const analyzeResume = async (provider, resumeFile, jdText) => {
+export const analyzeResume = async (provider, resumeFile, jdText, jdFile = null) => {
   const formData = new FormData();
   formData.append('provider', provider);
   formData.append('resume', resumeFile);
-  
-  // CRITICAL CHANGE: Append jdText as a string form field
-  formData.append('jd_text', jdText); 
-  
+
+  // If jdFile is provided, append it; otherwise append jdText
+  if (jdFile) {
+    formData.append('jd_file', jdFile);
+  } else {
+    formData.append('jd_text', jdText);
+  }
+
   const response = await api.post('/api/analyze', formData, {
     headers: {
-      // Still need 'multipart/form-data' because of the resume file
-      'Content-Type': 'multipart/form-data', 
+      'Content-Type': 'multipart/form-data',
     },
   });
   return response.data;
@@ -54,7 +57,7 @@ export const transformResume = async (provider, resumeText, jdText, jobTitle, co
   formData.append('company', company || '');
   formData.append('part_1_analysis', part1Analysis);
   formData.append('user_answers', userAnswers);
-  
+
   // Assuming the content-type is still handled correctly by axios for form data
   const response = await api.post('/api/transform', formData);
   return response.data;
