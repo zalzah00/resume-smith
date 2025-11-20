@@ -1,12 +1,12 @@
 // frontend/src/App.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import UserInput from './components/UserInput';
 import AnalysisResults from './components/AnalysisResults';
 import JobSearchAndSelect from './components/JobSearchAndSelect';
 import JDUpload from './components/JDUpload';
-import { analyzeResume, transformResume } from './services/api';
+import { analyzeResume, transformResume, wakeUpBackend } from './services/api';
 
 const App = () => {
   const [resumeFile, setResumeFile] = useState(null);
@@ -22,6 +22,22 @@ const App = () => {
   // New state for JD mode and file upload
   const [jdMode, setJdMode] = useState('search'); // 'search' or 'upload'
   const [jdFile, setJdFile] = useState(null);
+
+  // Backend wake-up notification state
+  const [backendStatus, setBackendStatus] = useState(null); // 'ready' or 'starting'
+
+  // Wake up backend on page load
+  useEffect(() => {
+    const pingBackend = async () => {
+      try {
+        await wakeUpBackend();
+        setBackendStatus('ready');
+      } catch (err) {
+        setBackendStatus('starting');
+      }
+    };
+    pingBackend();
+  }, []);
 
   // New setter function to handle text, title, and company
   const handleSetJdText = (text, title, company) => {
@@ -119,6 +135,21 @@ const App = () => {
       <header className="App-header">
         <h1>Resume Transformer ✨</h1>
       </header>
+
+      {/* Backend Status Notification - Compact for debugging */}
+      {backendStatus && (
+        <div style={{
+          padding: '4px 12px',
+          textAlign: 'center',
+          backgroundColor: backendStatus === 'ready' ? '#d4edda' : '#fff3cd',
+          color: backendStatus === 'ready' ? '#155724' : '#856404',
+          borderBottom: `1px solid ${backendStatus === 'ready' ? '#c3e6cb' : '#ffeaa7'}`,
+          fontSize: '12px',
+          margin: '0'
+        }}>
+          {backendStatus === 'ready' ? '✅ Backend is ready, please proceed.' : '⏳ Backend is starting, please proceed.'}
+        </div>
+      )}
 
       <main className="App-main">
         {/* Section 1: JD Mode Toggle and Input */}

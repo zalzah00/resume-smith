@@ -27,6 +27,19 @@ export const searchJobs = async (params) => {
 // --------------------------------------------------------
 
 
+// --- Health Check / Wake-Up Backend ---
+export const wakeUpBackend = async () => {
+  try {
+    const response = await api.get('/api/health', { timeout: 5000 });
+    return response.data;
+  } catch (err) {
+    // Silent failure - backend is still waking up
+    throw err;
+  }
+};
+// --------------------------------------------------------
+
+
 export const analyzeResume = async (provider, resumeFile, jdText, jdFile = null) => {
   const formData = new FormData();
   formData.append('provider', provider);

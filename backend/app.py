@@ -41,6 +41,18 @@ async def root():
     return {"message": "Resume Transformer API is running.", "status": FINAL_API_STATUS}
 
 
+@app.get("/api/health")
+async def health_check():
+    """
+    Lightweight health check endpoint for frontend to wake up the backend.
+    Returns immediately without any heavy processing.
+    """
+    return {
+        "status": "ok",
+        "message": "Backend is awake"
+    }
+
+
 # Temporary debug endpoint to test Groq responses directly (local dev only).
 @app.post("/api/debug-groq")
 async def debug_groq(model: str = Form(...), prompt: str = Form(...)):
